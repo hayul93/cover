@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // 테마 모드 관리
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
@@ -2592,29 +2593,45 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  void _rateApp(BuildContext context) {
-    // TODO: 실제 앱스토어 URL로 변경
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('리뷰 작성'),
-        content: const Text('앱스토어에서 리뷰를 작성해주시면\n앱 개선에 큰 도움이 됩니다!'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('나중에'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: url_launcher로 앱스토어 열기
-              // launchUrl(Uri.parse('https://apps.apple.com/app/idXXXXXXXXX?action=write-review'));
-            },
-            child: const Text('리뷰 작성'),
-          ),
-        ],
-      ),
+  // 앱스토어 ID (출시 후 실제 ID로 변경)
+  static const String _appStoreId = '6740097791';
+
+  Future<void> _rateApp(BuildContext context) async {
+    final url = Platform.isIOS
+        ? Uri.parse('https://apps.apple.com/app/id$_appStoreId?action=write-review')
+        : Uri.parse('https://play.google.com/store/apps/details?id=com.cover.app');
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('앱스토어를 열 수 없습니다')),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendEmail() async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: 'support@cover.app',
+      queryParameters: {
+        'subject': '[Cover 앱 문의]',
+        'body': '\n\n---\n앱 버전: 1.0.0\n기기: ${Platform.operatingSystem}',
+      },
     );
+
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
@@ -2706,9 +2723,7 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.mail_outline,
             title: '문의하기',
             subtitle: 'support@cover.app',
-            onTap: () {
-              // TODO: 이메일 앱 열기
-            },
+            onTap: _sendEmail,
           ),
 
           const SizedBox(height: 8),
@@ -2735,16 +2750,12 @@ class SettingsScreen extends StatelessWidget {
           _SettingsTile(
             icon: Icons.privacy_tip_outlined,
             title: '개인정보 처리방침',
-            onTap: () {
-              // TODO: 개인정보 처리방침 페이지 열기
-            },
+            onTap: () => _openUrl('https://cover.app/privacy'),
           ),
           _SettingsTile(
             icon: Icons.article_outlined,
             title: '이용약관',
-            onTap: () {
-              // TODO: 이용약관 페이지 열기
-            },
+            onTap: () => _openUrl('https://cover.app/terms'),
           ),
 
           const SizedBox(height: 32),
