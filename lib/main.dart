@@ -2583,6 +2583,40 @@ class ImageCanvasPainter extends CustomPainter {
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
+  void _showProSubscription(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _ProSubscriptionSheet(),
+    );
+  }
+
+  void _rateApp(BuildContext context) {
+    // TODO: 실제 앱스토어 URL로 변경
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('리뷰 작성'),
+        content: const Text('앱스토어에서 리뷰를 작성해주시면\n앱 개선에 큰 도움이 됩니다!'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('나중에'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: url_launcher로 앱스토어 열기
+              // launchUrl(Uri.parse('https://apps.apple.com/app/idXXXXXXXXX?action=write-review'));
+            },
+            child: const Text('리뷰 작성'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -2597,43 +2631,87 @@ class SettingsScreen extends StatelessWidget {
       ),
       body: ListView(
         children: [
-          // 테마 설정
-          const _SectionHeader(title: '화면'),
-          ValueListenableBuilder<ThemeMode>(
-            valueListenable: themeNotifier,
-            builder: (context, currentMode, child) {
-              return Column(
-                children: [
-                  RadioListTile<ThemeMode>(
-                    value: ThemeMode.system,
-                    groupValue: currentMode,
-                    onChanged: (value) => themeNotifier.value = value!,
-                    title: const Text('시스템 설정'),
-                    subtitle: const Text('기기 설정에 따라 자동 전환'),
-                    secondary: const Icon(Icons.brightness_auto),
+          // Pro 구독 배너
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: GestureDetector(
+              onTap: () => _showProSubscription(context),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  RadioListTile<ThemeMode>(
-                    value: ThemeMode.light,
-                    groupValue: currentMode,
-                    onChanged: (value) => themeNotifier.value = value!,
-                    title: const Text('라이트 모드'),
-                    subtitle: const Text('밝은 테마 사용'),
-                    secondary: const Icon(Icons.light_mode),
-                  ),
-                  RadioListTile<ThemeMode>(
-                    value: ThemeMode.dark,
-                    groupValue: currentMode,
-                    onChanged: (value) => themeNotifier.value = value!,
-                    title: const Text('다크 모드'),
-                    subtitle: const Text('어두운 테마 사용'),
-                    secondary: const Icon(Icons.dark_mode),
-                  ),
-                ],
-              );
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.workspace_premium, color: Colors.white, size: 28),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Cover Pro',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '모든 기능을 무제한으로',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // 지원
+          const _SectionHeader(title: '지원'),
+          _SettingsTile(
+            icon: Icons.star_outline,
+            title: '앱 리뷰 작성',
+            subtitle: '별점과 리뷰로 응원해주세요',
+            onTap: () => _rateApp(context),
+          ),
+          _SettingsTile(
+            icon: Icons.mail_outline,
+            title: '문의하기',
+            subtitle: 'support@cover.app',
+            onTap: () {
+              // TODO: 이메일 앱 열기
             },
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
 
           // 앱 정보
           const _SectionHeader(title: '정보'),
@@ -2652,6 +2730,20 @@ class SettingsScreen extends StatelessWidget {
                 applicationName: 'Cover',
                 applicationVersion: '1.0.0',
               );
+            },
+          ),
+          _SettingsTile(
+            icon: Icons.privacy_tip_outlined,
+            title: '개인정보 처리방침',
+            onTap: () {
+              // TODO: 개인정보 처리방침 페이지 열기
+            },
+          ),
+          _SettingsTile(
+            icon: Icons.article_outlined,
+            title: '이용약관',
+            onTap: () {
+              // TODO: 이용약관 페이지 열기
             },
           ),
 
@@ -2682,6 +2774,214 @@ class SettingsScreen extends StatelessWidget {
           ),
 
           const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+}
+
+// Pro 구독 바텀시트
+class _ProSubscriptionSheet extends StatelessWidget {
+  const _ProSubscriptionSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[400],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // 헤더
+          const Icon(Icons.workspace_premium, size: 48, color: Color(0xFF6366F1)),
+          const SizedBox(height: 12),
+          const Text(
+            'Cover Pro',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '모든 프리미엄 기능을 무제한으로 사용하세요',
+            style: TextStyle(color: Colors.grey[600], fontSize: 14),
+          ),
+
+          const SizedBox(height: 24),
+
+          // 기능 목록
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              children: [
+                _buildFeatureRow(Icons.auto_fix_high, '모든 편집 도구 무제한'),
+                _buildFeatureRow(Icons.photo_library, '배치 처리 무제한'),
+                _buildFeatureRow(Icons.emoji_emotions, '50+ 프리미엄 스티커'),
+                _buildFeatureRow(Icons.block, '광고 제거'),
+                _buildFeatureRow(Icons.support_agent, '우선 고객 지원'),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // 가격 옵션
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              children: [
+                _buildPriceOption(
+                  context,
+                  title: '연간',
+                  price: '₩19,900/년',
+                  subtitle: '월 ₩1,658 (44% 할인)',
+                  isPopular: true,
+                ),
+                const SizedBox(height: 12),
+                _buildPriceOption(
+                  context,
+                  title: '월간',
+                  price: '₩2,900/월',
+                  subtitle: '',
+                  isPopular: false,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // 구독 버튼
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: () {
+                  // TODO: 실제 구독 처리
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('곧 출시 예정입니다!')),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  '무료 체험 시작하기',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // 하단 안내
+          Text(
+            '7일 무료 체험 후 결제가 시작됩니다',
+            style: TextStyle(color: Colors.grey[500], fontSize: 12),
+          ),
+          TextButton(
+            onPressed: () {
+              // TODO: 구독 복원
+            },
+            child: Text(
+              '이전 구매 복원',
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF6366F1), size: 22),
+          const SizedBox(width: 12),
+          Text(text, style: const TextStyle(fontSize: 15)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPriceOption(
+    BuildContext context, {
+    required String title,
+    required String price,
+    required String subtitle,
+    required bool isPopular,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: isPopular ? const Color(0xFF6366F1) : Colors.grey[300]!,
+          width: isPopular ? 2 : 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    if (isPopular) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          '인기',
+                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                ],
+              ],
+            ),
+          ),
+          Text(
+            price,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
         ],
       ),
     );
