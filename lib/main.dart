@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -606,6 +607,104 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
+  Future<void> _cropImage() async {
+    if (_currentBytes == null || _isProcessing) return;
+
+    setState(() => _isProcessing = true);
+
+    try {
+      // 현재 이미지를 임시 파일로 저장
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/crop_temp_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await tempFile.writeAsBytes(_currentBytes!);
+
+      // image_cropper 실행
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: tempFile.path,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: '이미지 자르기',
+            toolbarColor: Colors.black,
+            toolbarWidgetColor: Colors.white,
+            backgroundColor: Colors.black,
+            activeControlsWidgetColor: const Color(0xFF2196F3),
+            initAspectRatio: CropAspectRatioPreset.original,
+            lockAspectRatio: false,
+            aspectRatioPresets: [
+              CropAspectRatioPreset.original,
+              CropAspectRatioPreset.square,
+              CropAspectRatioPreset.ratio4x3,
+              CropAspectRatioPreset.ratio16x9,
+              CropAspectRatioPreset.ratio3x2,
+            ],
+          ),
+          IOSUiSettings(
+            title: '이미지 자르기',
+            cancelButtonTitle: '취소',
+            doneButtonTitle: '완료',
+            aspectRatioPresets: [
+              CropAspectRatioPreset.original,
+              CropAspectRatioPreset.square,
+              CropAspectRatioPreset.ratio4x3,
+              CropAspectRatioPreset.ratio16x9,
+              CropAspectRatioPreset.ratio3x2,
+            ],
+            aspectRatioLockEnabled: false,
+            resetAspectRatioEnabled: true,
+            rotateButtonsHidden: false,
+            rotateClockwiseButtonHidden: true,
+          ),
+        ],
+      );
+
+      // 임시 파일 삭제
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+
+      if (croppedFile != null) {
+        // Undo 스택에 현재 상태 저장
+        _undoStack.add(_currentBytes!);
+        _redoStack.clear();
+        if (_undoStack.length > 10) _undoStack.removeAt(0);
+
+        // 자른 이미지 로드
+        final croppedBytes = await File(croppedFile.path).readAsBytes();
+
+        // 원본도 업데이트 (지우개가 올바르게 동작하도록)
+        _originalBytes = croppedBytes;
+        _currentBytes = croppedBytes;
+
+        await _updateDisplayImage(croppedBytes);
+
+        // 자른 파일 삭제
+        if (await File(croppedFile.path).exists()) {
+          await File(croppedFile.path).delete();
+        }
+
+        // 줌 리셋
+        _resetZoom();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('이미지가 잘렸습니다'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('자르기 실패: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
   Offset? _canvasToImage(Offset canvasPoint, Size canvasSize) {
     if (_displayImage == null) return null;
 
@@ -666,6 +765,12 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
         title: const Text('편집', style: TextStyle(color: Colors.white)),
         actions: [
+          // 자르기 버튼
+          IconButton(
+            icon: const Icon(Icons.crop, color: Colors.white),
+            onPressed: _cropImage,
+            tooltip: '자르기',
+          ),
           // 회전 버튼
           IconButton(
             icon: const Icon(Icons.rotate_right, color: Colors.white),
