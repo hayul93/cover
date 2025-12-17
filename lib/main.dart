@@ -275,6 +275,26 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: OutlinedButton.icon(
+                        onPressed: _isLoading ? null : () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const BatchScreen()),
+                          );
+                        },
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: const Text('배치 처리', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: textColor,
+                          side: BorderSide(color: subtitleColor),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                        ),
+                      ),
+                    ),
 
                     // 최근 편집 이미지
                     if (_recentImages.isNotEmpty) ...[
@@ -2577,6 +2597,471 @@ class ImageCanvasPainter extends CustomPainter {
         oldDelegate.shapeEnd != shapeEnd ||
         oldDelegate.highlighterColor != highlighterColor;
   }
+}
+
+// ==================== Batch Screen ====================
+
+enum BatchEffect { blur, mosaic, blackBar }
+
+class BatchScreen extends StatefulWidget {
+  const BatchScreen({super.key});
+
+  @override
+  State<BatchScreen> createState() => _BatchScreenState();
+}
+
+class _BatchScreenState extends State<BatchScreen> {
+  final ImagePicker _picker = ImagePicker();
+  List<File> _selectedImages = [];
+  BatchEffect _selectedEffect = BatchEffect.blur;
+  double _intensity = 0.5;
+  bool _isProcessing = false;
+  int _processedCount = 0;
+  String _statusMessage = '';
+
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile> images = await _picker.pickMultiImage(
+        imageQuality: 100,
+        limit: 10,
+      );
+
+      if (images.isNotEmpty) {
+        setState(() {
+          _selectedImages = images.map((x) => File(x.path)).toList();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('이미지를 선택할 수 없습니다: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _processAllImages() async {
+    if (_selectedImages.isEmpty || _isProcessing) return;
+
+    setState(() {
+      _isProcessing = true;
+      _processedCount = 0;
+      _statusMessage = '처리 중...';
+    });
+
+    int successCount = 0;
+
+    for (int i = 0; i < _selectedImages.length; i++) {
+      setState(() {
+        _statusMessage = '${i + 1}/${_selectedImages.length} 처리 중...';
+      });
+
+      try {
+        final result = await compute(_applyBatchEffect, _BatchProcessRequest(
+          imagePath: _selectedImages[i].path,
+          effect: _selectedEffect,
+          intensity: _intensity,
+        ));
+
+        if (result != null) {
+          // 갤러리에 저장
+          await ImageGallerySaver.saveImage(
+            result,
+            quality: 90,
+            name: 'Cover_batch_${DateTime.now().millisecondsSinceEpoch}_$i',
+          );
+          successCount++;
+        }
+      } catch (e) {
+        debugPrint('배치 처리 오류: $e');
+      }
+
+      setState(() {
+        _processedCount = i + 1;
+      });
+    }
+
+    setState(() {
+      _isProcessing = false;
+      _statusMessage = '';
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$successCount개 이미지가 저장되었습니다'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      if (successCount > 0) {
+        Navigator.pop(context);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('배치 처리'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: _isProcessing ? null : () => Navigator.pop(context),
+        ),
+      ),
+      body: Column(
+        children: [
+          // 이미지 선택 영역
+          Expanded(
+            child: _selectedImages.isEmpty
+                ? _buildEmptyState()
+                : _buildImageGrid(),
+          ),
+
+          // 하단 컨트롤
+          Container(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 효과 선택
+                    Row(
+                      children: [
+                        _buildEffectChip(BatchEffect.blur, '블러', Icons.blur_on),
+                        const SizedBox(width: 8),
+                        _buildEffectChip(BatchEffect.mosaic, '모자이크', Icons.grid_view),
+                        const SizedBox(width: 8),
+                        _buildEffectChip(BatchEffect.blackBar, '검은바', Icons.rectangle),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // 강도 슬라이더
+                    if (_selectedEffect != BatchEffect.blackBar)
+                      Row(
+                        children: [
+                          const Text('강도', style: TextStyle(fontSize: 13)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Slider(
+                              value: _intensity,
+                              min: 0.1,
+                              max: 1.0,
+                              onChanged: (v) => setState(() => _intensity = v),
+                            ),
+                          ),
+                          Text('${(_intensity * 100).toInt()}%',
+                              style: const TextStyle(fontSize: 13)),
+                        ],
+                      ),
+
+                    const SizedBox(height: 16),
+
+                    // 진행 상태
+                    if (_isProcessing) ...[
+                      LinearProgressIndicator(
+                        value: _selectedImages.isNotEmpty
+                            ? _processedCount / _selectedImages.length
+                            : 0,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(_statusMessage,
+                          style: TextStyle(color: Colors.grey[600])),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // 처리 버튼
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: _selectedImages.isEmpty || _isProcessing
+                            ? null
+                            : _processAllImages,
+                        icon: _isProcessing
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.auto_fix_high),
+                        label: Text(
+                          _isProcessing
+                              ? '처리 중...'
+                              : '${_selectedImages.length}개 이미지 처리',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2196F3),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.photo_library_outlined, size: 64, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          Text(
+            '이미지를 선택하세요',
+            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '최대 10장까지 선택 가능',
+            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _pickImages,
+            icon: const Icon(Icons.add_photo_alternate),
+            label: const Text('갤러리에서 선택'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2196F3),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageGrid() {
+    return Column(
+      children: [
+        // 상단 액션 바
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${_selectedImages.length}개 선택됨',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: _isProcessing ? null : _pickImages,
+                    icon: const Icon(Icons.add, size: 20),
+                    label: const Text('추가'),
+                  ),
+                  TextButton.icon(
+                    onPressed: _isProcessing
+                        ? null
+                        : () => setState(() => _selectedImages.clear()),
+                    icon: const Icon(Icons.clear_all, size: 20),
+                    label: const Text('전체 삭제'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // 이미지 그리드
+        Expanded(
+          child: GridView.builder(
+            padding: const EdgeInsets.all(12),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: _selectedImages.length,
+            itemBuilder: (context, index) {
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      _selectedImages[index],
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  // 삭제 버튼
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: GestureDetector(
+                      onTap: _isProcessing
+                          ? null
+                          : () {
+                              setState(() {
+                                _selectedImages.removeAt(index);
+                              });
+                            },
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close,
+                            size: 16, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  // 처리 완료 표시
+                  if (_isProcessing && index < _processedCount)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.check, color: Colors.white, size: 32),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEffectChip(BatchEffect effect, String label, IconData icon) {
+    final isSelected = _selectedEffect == effect;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedEffect = effect),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF2196F3)
+                : Colors.grey.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  size: 18, color: isSelected ? Colors.white : Colors.grey[600]),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.grey[600],
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 배치 처리 요청 데이터
+class _BatchProcessRequest {
+  final String imagePath;
+  final BatchEffect effect;
+  final double intensity;
+
+  _BatchProcessRequest({
+    required this.imagePath,
+    required this.effect,
+    required this.intensity,
+  });
+}
+
+// 배치 효과 적용 (isolate에서 실행)
+Uint8List? _applyBatchEffect(_BatchProcessRequest request) {
+  try {
+    final bytes = File(request.imagePath).readAsBytesSync();
+    final image = img.decodeImage(bytes);
+    if (image == null) return null;
+
+    img.Image processed;
+
+    switch (request.effect) {
+      case BatchEffect.blur:
+        final radius = (request.intensity * 20).toInt().clamp(1, 20);
+        processed = img.gaussianBlur(image, radius: radius);
+        break;
+      case BatchEffect.mosaic:
+        final blockSize = (request.intensity * 30).toInt().clamp(5, 30);
+        processed = _applyMosaicToImage(image, blockSize);
+        break;
+      case BatchEffect.blackBar:
+        // 전체 이미지를 검은색으로
+        processed = img.fill(image, color: img.ColorRgb8(0, 0, 0));
+        break;
+    }
+
+    return Uint8List.fromList(img.encodeJpg(processed, quality: 90));
+  } catch (e) {
+    debugPrint('배치 처리 오류: $e');
+    return null;
+  }
+}
+
+// 모자이크 효과 적용
+img.Image _applyMosaicToImage(img.Image image, int blockSize) {
+  final result = img.Image.from(image);
+
+  for (int y = 0; y < image.height; y += blockSize) {
+    for (int x = 0; x < image.width; x += blockSize) {
+      // 블록 평균 색상 계산
+      int r = 0, g = 0, b = 0, count = 0;
+
+      for (int by = 0; by < blockSize && y + by < image.height; by++) {
+        for (int bx = 0; bx < blockSize && x + bx < image.width; bx++) {
+          final pixel = image.getPixel(x + bx, y + by);
+          r += pixel.r.toInt();
+          g += pixel.g.toInt();
+          b += pixel.b.toInt();
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        r = r ~/ count;
+        g = g ~/ count;
+        b = b ~/ count;
+
+        // 블록 채우기
+        for (int by = 0; by < blockSize && y + by < image.height; by++) {
+          for (int bx = 0; bx < blockSize && x + bx < image.width; bx++) {
+            result.setPixelRgb(x + bx, y + by, r, g, b);
+          }
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 // ==================== Settings Screen ====================
