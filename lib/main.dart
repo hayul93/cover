@@ -358,9 +358,65 @@ class _HomeScreenState extends State<HomeScreen> {
 
 // ==================== Editor Screen ====================
 
-enum EditTool { blur, mosaic, eraser, blackBar, highlighter }
+enum EditTool { blur, mosaic, eraser, blackBar, highlighter, sticker }
 
 enum DrawMode { brush, rectangle, circle }
+
+// 스티커 데이터 모델
+class StickerData {
+  String content; // 이모지 또는 텍스트
+  Offset position;
+  double scale;
+  double rotation;
+  bool isEmoji;
+
+  StickerData({
+    required this.content,
+    required this.position,
+    this.scale = 1.0,
+    this.rotation = 0.0,
+    this.isEmoji = true,
+  });
+
+  StickerData copyWith({
+    String? content,
+    Offset? position,
+    double? scale,
+    double? rotation,
+    bool? isEmoji,
+  }) {
+    return StickerData(
+      content: content ?? this.content,
+      position: position ?? this.position,
+      scale: scale ?? this.scale,
+      rotation: rotation ?? this.rotation,
+      isEmoji: isEmoji ?? this.isEmoji,
+    );
+  }
+}
+
+// 스티커 프리셋
+class StickerPresets {
+  static const List<String> emojis = [
+    '😊', '😎', '🙈', '😴', '🤫', '🫣',
+    '❤️', '⭐', '✨', '🔥', '💯', '👍',
+    '🚫', '⛔', '🔒', '👀', '💬', '📍',
+  ];
+
+  static const List<String> shapes = [
+    '⬛', '⬜', '🔴', '🟡', '🟢', '🔵',
+    '◼️', '◻️', '●', '○', '★', '♥️',
+  ];
+
+  static const List<String> labels = [
+    'PRIVATE',
+    'CENSORED',
+    'BLOCKED',
+    'NO PHOTO',
+    '비공개',
+    '모자이크',
+  ];
+}
 
 // 브러시 프리셋
 enum BrushPreset { small, medium, large }
@@ -478,6 +534,12 @@ class _EditorScreenState extends State<EditorScreen> {
   // Undo/Redo 스택
   final List<Uint8List> _undoStack = [];
   final List<Uint8List> _redoStack = [];
+
+  // 스티커
+  final List<StickerData> _stickers = [];
+  int? _selectedStickerIndex;
+  Offset? _stickerDragStart;
+  double _initialStickerScale = 1.0;
 
   @override
   void initState() {
@@ -941,6 +1003,9 @@ class _EditorScreenState extends State<EditorScreen> {
                                 ),
                               ),
                             ),
+                          // 스티커 렌더링
+                          if (!_showingOriginal)
+                            ..._buildStickerWidgets(canvasSize),
                         ],
                       );
                     },
@@ -977,13 +1042,16 @@ class _EditorScreenState extends State<EditorScreen> {
                                   _buildCompactToolChip(EditTool.blackBar, '검은바'),
                                   _buildCompactToolChip(EditTool.highlighter, '형광펜'),
                                   _buildCompactToolChip(EditTool.eraser, '지우개'),
-                                  const SizedBox(width: 8),
-                                  Container(width: 1, height: 24, color: Colors.white24),
-                                  const SizedBox(width: 8),
-                                  // 모드 선택
-                                  _buildCompactModeChip(DrawMode.brush, Icons.brush),
-                                  _buildCompactModeChip(DrawMode.rectangle, Icons.crop_square),
-                                  _buildCompactModeChip(DrawMode.circle, Icons.circle_outlined),
+                                  _buildCompactToolChip(EditTool.sticker, '스티커'),
+                                  if (_currentTool != EditTool.sticker) ...[
+                                    const SizedBox(width: 8),
+                                    Container(width: 1, height: 24, color: Colors.white24),
+                                    const SizedBox(width: 8),
+                                    // 모드 선택
+                                    _buildCompactModeChip(DrawMode.brush, Icons.brush),
+                                    _buildCompactModeChip(DrawMode.rectangle, Icons.crop_square),
+                                    _buildCompactModeChip(DrawMode.circle, Icons.circle_outlined),
+                                  ],
                                 ],
                               ),
                             ),
@@ -1019,28 +1087,34 @@ class _EditorScreenState extends State<EditorScreen> {
                         ),
                       ),
 
-                    // 3. 크기 + 강도 슬라이더 (한 줄씩)
-                    _buildSliderRow(
-                      label: '크기',
-                      value: _brushSize,
-                      min: 10,
-                      max: 120,
-                      displayValue: '${_brushSize.toInt()}',
-                      onChanged: (v) => setState(() => _brushSize = v),
-                      presets: true,
-                    ),
+                    // 3. 크기 + 강도 슬라이더 (스티커 모드가 아닐 때)
+                    if (_currentTool != EditTool.sticker) ...[
+                      _buildSliderRow(
+                        label: '크기',
+                        value: _brushSize,
+                        min: 10,
+                        max: 120,
+                        displayValue: '${_brushSize.toInt()}',
+                        onChanged: (v) => setState(() => _brushSize = v),
+                        presets: true,
+                      ),
 
-                    const SizedBox(height: 6),
+                      const SizedBox(height: 6),
 
-                    _buildSliderRow(
-                      label: '강도',
-                      value: _intensity,
-                      min: 0.1,
-                      max: 1.0,
-                      displayValue: '${(_intensity * 100).toInt()}%',
-                      onChanged: (v) => setState(() => _intensity = v),
-                      enabled: _currentTool != EditTool.eraser && _currentTool != EditTool.blackBar,
-                    ),
+                      _buildSliderRow(
+                        label: '강도',
+                        value: _intensity,
+                        min: 0.1,
+                        max: 1.0,
+                        displayValue: '${(_intensity * 100).toInt()}%',
+                        onChanged: (v) => setState(() => _intensity = v),
+                        enabled: _currentTool != EditTool.eraser && _currentTool != EditTool.blackBar,
+                      ),
+                    ],
+
+                    // 3. 스티커 UI (스티커 모드일 때)
+                    if (_currentTool == EditTool.sticker)
+                      _buildStickerControls(),
 
                     const SizedBox(height: 12),
 
@@ -1092,7 +1166,12 @@ class _EditorScreenState extends State<EditorScreen> {
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: GestureDetector(
-        onTap: () => setState(() => _currentTool = tool),
+        onTap: () {
+          setState(() => _currentTool = tool);
+          if (tool == EditTool.sticker) {
+            _showStickerPicker();
+          }
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
@@ -1129,6 +1208,345 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
       ),
     );
+  }
+
+  // 스티커 선택 바텀시트
+  void _showStickerPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.5,
+        decoration: const BoxDecoration(
+          color: Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // 핸들
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // 탭
+            Expanded(
+              child: DefaultTabController(
+                length: 3,
+                child: Column(
+                  children: [
+                    const TabBar(
+                      indicatorColor: Color(0xFF2196F3),
+                      labelColor: Colors.white,
+                      unselectedLabelColor: Colors.white54,
+                      tabs: [
+                        Tab(text: '이모지'),
+                        Tab(text: '도형'),
+                        Tab(text: '텍스트'),
+                      ],
+                    ),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          // 이모지 탭
+                          _buildStickerGrid(StickerPresets.emojis, true),
+                          // 도형 탭
+                          _buildStickerGrid(StickerPresets.shapes, true),
+                          // 텍스트 탭
+                          _buildLabelGrid(StickerPresets.labels),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStickerGrid(List<String> items, bool isEmoji) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 6,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        return GestureDetector(
+          onTap: () {
+            Navigator.pop(context);
+            _addSticker(items[index], isEmoji);
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Text(
+                items[index],
+                style: const TextStyle(fontSize: 28),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLabelGrid(List<String> labels) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        childAspectRatio: 2.5,
+      ),
+      itemCount: labels.length,
+      itemBuilder: (context, index) {
+        return GestureDetector(
+          onTap: () {
+            Navigator.pop(context);
+            _addSticker(labels[index], false);
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: Center(
+              child: Text(
+                labels[index],
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _addSticker(String content, bool isEmoji) {
+    // 이미지 중앙에 스티커 추가
+    if (_displayImage == null) return;
+
+    setState(() {
+      _stickers.add(StickerData(
+        content: content,
+        position: const Offset(0.5, 0.5), // 정규화된 좌표 (0~1)
+        scale: 1.0,
+        isEmoji: isEmoji,
+      ));
+      _selectedStickerIndex = _stickers.length - 1;
+    });
+  }
+
+  Widget _buildStickerControls() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: Row(
+        children: [
+          // 스티커 추가 버튼
+          Expanded(
+            child: GestureDetector(
+              onTap: _showStickerPicker,
+              child: Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2196F3),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add, color: Colors.white, size: 20),
+                    SizedBox(width: 6),
+                    Text('스티커 추가', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (_stickers.isNotEmpty) ...[
+            const SizedBox(width: 10),
+            // 선택된 스티커 삭제 버튼
+            GestureDetector(
+              onTap: _selectedStickerIndex != null ? _deleteSelectedSticker : null,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: _selectedStickerIndex != null
+                      ? Colors.red.withValues(alpha: 0.8)
+                      : Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Icon(
+                  Icons.delete_outline,
+                  color: _selectedStickerIndex != null ? Colors.white : Colors.white38,
+                  size: 20,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            // 모든 스티커 삭제 버튼
+            GestureDetector(
+              onTap: _clearAllStickers,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: const Icon(Icons.clear_all, color: Colors.white70, size: 20),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _deleteSelectedSticker() {
+    if (_selectedStickerIndex != null && _selectedStickerIndex! < _stickers.length) {
+      setState(() {
+        _stickers.removeAt(_selectedStickerIndex!);
+        _selectedStickerIndex = _stickers.isEmpty ? null : (_stickers.length - 1);
+      });
+    }
+  }
+
+  void _clearAllStickers() {
+    setState(() {
+      _stickers.clear();
+      _selectedStickerIndex = null;
+    });
+  }
+
+  List<Widget> _buildStickerWidgets(Size canvasSize) {
+    if (_displayImage == null) return [];
+
+    // 이미지 영역 계산
+    final imageAspect = _displayImage!.width / _displayImage!.height;
+    final canvasAspect = canvasSize.width / canvasSize.height;
+
+    double imageWidth, imageHeight;
+    double offsetX = 0, offsetY = 0;
+
+    if (imageAspect > canvasAspect) {
+      imageWidth = canvasSize.width;
+      imageHeight = canvasSize.width / imageAspect;
+      offsetY = (canvasSize.height - imageHeight) / 2;
+    } else {
+      imageHeight = canvasSize.height;
+      imageWidth = canvasSize.height * imageAspect;
+      offsetX = (canvasSize.width - imageWidth) / 2;
+    }
+
+    return _stickers.asMap().entries.map((entry) {
+      final index = entry.key;
+      final sticker = entry.value;
+      final isSelected = _selectedStickerIndex == index;
+
+      // 스티커 기본 크기 (이모지 vs 텍스트)
+      final baseSize = sticker.isEmoji ? 60.0 : 80.0;
+      final stickerSize = baseSize * sticker.scale;
+
+      // 정규화된 좌표를 실제 좌표로 변환
+      final x = offsetX + sticker.position.dx * imageWidth - stickerSize / 2;
+      final y = offsetY + sticker.position.dy * imageHeight - stickerSize / 2;
+
+      return Positioned(
+        left: x * _scale + _offset.dx,
+        top: y * _scale + _offset.dy,
+        child: GestureDetector(
+          onTap: () {
+            setState(() => _selectedStickerIndex = index);
+          },
+          onPanStart: (details) {
+            setState(() {
+              _selectedStickerIndex = index;
+              _stickerDragStart = sticker.position;
+            });
+          },
+          onPanUpdate: (details) {
+            if (_selectedStickerIndex == index) {
+              setState(() {
+                // 드래그 델타를 정규화된 좌표로 변환
+                final dx = details.delta.dx / (imageWidth * _scale);
+                final dy = details.delta.dy / (imageHeight * _scale);
+                sticker.position = Offset(
+                  (sticker.position.dx + dx).clamp(0.0, 1.0),
+                  (sticker.position.dy + dy).clamp(0.0, 1.0),
+                );
+              });
+            }
+          },
+          onScaleStart: (details) {
+            _initialStickerScale = sticker.scale;
+          },
+          onScaleUpdate: (details) {
+            if (_selectedStickerIndex == index && details.scale != 1.0) {
+              setState(() {
+                sticker.scale = (_initialStickerScale * details.scale).clamp(0.5, 3.0);
+              });
+            }
+          },
+          child: Transform.scale(
+            scale: _scale,
+            child: Container(
+              width: stickerSize,
+              height: sticker.isEmoji ? stickerSize : stickerSize * 0.5,
+              decoration: isSelected
+                  ? BoxDecoration(
+                      border: Border.all(color: const Color(0xFF2196F3), width: 2),
+                      borderRadius: BorderRadius.circular(8),
+                    )
+                  : null,
+              child: Center(
+                child: sticker.isEmoji
+                    ? Text(
+                        sticker.content,
+                        style: TextStyle(fontSize: stickerSize * 0.7),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          sticker.content,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: stickerSize * 0.2,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
   }
 
   Widget _buildSliderRow({
@@ -1398,13 +1816,28 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _isProcessing = true);
 
     try {
+      // 스티커가 있으면 합성
+      Uint8List finalBytes = _currentBytes!;
+      if (_stickers.isNotEmpty) {
+        finalBytes = await compute(compositeStickers, CompositeRequest(
+          imageBytes: _currentBytes!,
+          stickers: _stickers.map((s) => StickerInfo(
+            content: s.content,
+            positionX: s.position.dx,
+            positionY: s.position.dy,
+            scale: s.scale,
+            isEmoji: s.isEmoji,
+          )).toList(),
+        ));
+      }
+
       // 파일명 생성
       final timestamp = DateTime.now().toString().replaceAll(RegExp(r'[^0-9]'), '').substring(0, 14);
       final fileName = 'Cover_$timestamp';
 
       // 갤러리에 저장
       final result = await ImageGallerySaver.saveImage(
-        _currentBytes!,
+        finalBytes,
         quality: quality.jpegQuality,
         name: fileName,
       );
@@ -1482,6 +1915,80 @@ class _EditorScreenState extends State<EditorScreen> {
 
 // ==================== Image Processing ====================
 
+// 스티커 합성을 위한 데이터 클래스
+class StickerInfo {
+  final String content;
+  final double positionX;
+  final double positionY;
+  final double scale;
+  final bool isEmoji;
+
+  StickerInfo({
+    required this.content,
+    required this.positionX,
+    required this.positionY,
+    required this.scale,
+    required this.isEmoji,
+  });
+}
+
+class CompositeRequest {
+  final Uint8List imageBytes;
+  final List<StickerInfo> stickers;
+
+  CompositeRequest({
+    required this.imageBytes,
+    required this.stickers,
+  });
+}
+
+// 스티커 합성 함수 (Isolate에서 실행)
+Uint8List compositeStickers(CompositeRequest request) {
+  final image = img.decodeImage(request.imageBytes);
+  if (image == null) return request.imageBytes;
+
+  for (final sticker in request.stickers) {
+    // 스티커 위치 계산 (정규화된 좌표 -> 실제 좌표)
+    final x = (sticker.positionX * image.width).toInt();
+    final y = (sticker.positionY * image.height).toInt();
+
+    // 스티커 크기 계산
+    final baseSize = sticker.isEmoji ? 60 : 80;
+    final size = (baseSize * sticker.scale).toInt();
+
+    if (sticker.isEmoji) {
+      // 이모지: 검은색 원으로 가리기 (이모지는 이미지로 렌더링 어려움)
+      final halfSize = size ~/ 2;
+      for (int dy = -halfSize; dy < halfSize; dy++) {
+        for (int dx = -halfSize; dx < halfSize; dx++) {
+          if (dx * dx + dy * dy <= halfSize * halfSize) {
+            final px = x + dx;
+            final py = y + dy;
+            if (px >= 0 && px < image.width && py >= 0 && py < image.height) {
+              image.setPixel(px, py, img.ColorRgba8(0, 0, 0, 255));
+            }
+          }
+        }
+      }
+    } else {
+      // 텍스트 라벨: 검은색 사각형으로 가리기
+      final halfWidth = size ~/ 2;
+      final halfHeight = size ~/ 4;
+      for (int dy = -halfHeight; dy < halfHeight; dy++) {
+        for (int dx = -halfWidth; dx < halfWidth; dx++) {
+          final px = x + dx;
+          final py = y + dy;
+          if (px >= 0 && px < image.width && py >= 0 && py < image.height) {
+            image.setPixel(px, py, img.ColorRgba8(0, 0, 0, 255));
+          }
+        }
+      }
+    }
+  }
+
+  return Uint8List.fromList(img.encodeJpg(image, quality: 95));
+}
+
 class ProcessRequest {
   final Uint8List imageBytes;
   final List<List<double>> points;
@@ -1548,6 +2055,8 @@ Uint8List _processImage(ProcessRequest request) {
       case EditTool.highlighter:
         _applyShapeHighlighter(image, start, end, request.drawMode, request.highlighterColor, request.intensity);
         break;
+      case EditTool.sticker:
+        break; // 스티커는 별도 레이어에서 처리
     }
   } else {
     // 브러시 모드
@@ -1570,6 +2079,8 @@ Uint8List _processImage(ProcessRequest request) {
           _applyEraser(image, original, points, radius);
         }
         break;
+      case EditTool.sticker:
+        break; // 스티커는 별도 레이어에서 처리
     }
   }
 
@@ -2048,6 +2559,8 @@ class ImageCanvasPainter extends CustomPainter {
         return Colors.black.withValues(alpha: 0.7);
       case EditTool.highlighter:
         return highlighterColor.withValues(alpha: 0.5);
+      case EditTool.sticker:
+        return Colors.transparent;
     }
   }
 
