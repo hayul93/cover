@@ -402,6 +402,10 @@ class _EditorScreenState extends State<EditorScreen> {
   Uint8List? _originalBytes;
   Uint8List? _currentBytes;
   ui.Image? _displayImage;
+  ui.Image? _originalDisplayImage; // 원본 이미지 캐시
+
+  // 비교 모드
+  bool _showingOriginal = false;
 
   // 편집 상태
   EditTool _currentTool = EditTool.blur;
@@ -450,6 +454,11 @@ class _EditorScreenState extends State<EditorScreen> {
       _currentBytes = resizedBytes;
 
       await _updateDisplayImage(resizedBytes);
+
+      // 원본 이미지 캐시
+      final codec = await ui.instantiateImageCodec(resizedBytes);
+      final frame = await codec.getNextFrame();
+      _originalDisplayImage = frame.image;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -803,54 +812,92 @@ class _EditorScreenState extends State<EditorScreen> {
                 : LayoutBuilder(
                     builder: (context, constraints) {
                       final canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
-                      return GestureDetector(
-                        onScaleStart: (details) {
-                          _previousScale = _scale;
-                          _previousOffset = _offset;
-                          if (details.pointerCount == 1) {
-                            _onPanStart(DragStartDetails(localPosition: details.localFocalPoint), canvasSize);
-                          }
-                        },
-                        onScaleUpdate: (details) {
-                          if (details.pointerCount == 2) {
-                            // 핀치 줌
-                            setState(() {
-                              _scale = (_previousScale * details.scale).clamp(0.5, 4.0);
-                              _offset = details.localFocalPoint - (_previousOffset + details.localFocalPoint) * details.scale + _previousOffset;
-                            });
-                          } else if (details.pointerCount == 1) {
-                            _onPanUpdate(DragUpdateDetails(
-                              localPosition: details.localFocalPoint,
-                              globalPosition: details.focalPoint,
-                              delta: details.focalPointDelta,
-                            ), canvasSize);
-                          }
-                        },
-                        onScaleEnd: (details) {
-                          if (details.pointerCount <= 1) {
-                            _onPanEnd(DragEndDetails());
-                          }
-                        },
-                        child: ClipRect(
-                          child: Transform(
-                            transform: Matrix4.identity()
-                              ..translate(_offset.dx, _offset.dy)
-                              ..scale(_scale),
-                            child: CustomPaint(
-                              size: canvasSize,
-                              painter: ImageCanvasPainter(
-                                image: _displayImage!,
-                                currentStroke: _currentStroke,
-                                brushSize: _brushSize,
-                                tool: _currentTool,
-                                drawMode: _drawMode,
-                                shapeStart: _shapeStart,
-                                shapeEnd: _shapeEnd,
-                                highlighterColor: _highlighterColor,
+                      return Stack(
+                        children: [
+                          GestureDetector(
+                            onScaleStart: (details) {
+                              _previousScale = _scale;
+                              _previousOffset = _offset;
+                              if (details.pointerCount == 1) {
+                                _onPanStart(DragStartDetails(localPosition: details.localFocalPoint), canvasSize);
+                              }
+                            },
+                            onScaleUpdate: (details) {
+                              if (details.pointerCount == 2) {
+                                // 핀치 줌
+                                setState(() {
+                                  _scale = (_previousScale * details.scale).clamp(0.5, 4.0);
+                                  _offset = details.localFocalPoint - (_previousOffset + details.localFocalPoint) * details.scale + _previousOffset;
+                                });
+                              } else if (details.pointerCount == 1) {
+                                _onPanUpdate(DragUpdateDetails(
+                                  localPosition: details.localFocalPoint,
+                                  globalPosition: details.focalPoint,
+                                  delta: details.focalPointDelta,
+                                ), canvasSize);
+                              }
+                            },
+                            onScaleEnd: (details) {
+                              if (details.pointerCount <= 1) {
+                                _onPanEnd(DragEndDetails());
+                              }
+                            },
+                            onLongPressStart: (_) {
+                              if (_originalDisplayImage != null) {
+                                setState(() => _showingOriginal = true);
+                              }
+                            },
+                            onLongPressEnd: (_) {
+                              setState(() => _showingOriginal = false);
+                            },
+                            child: ClipRect(
+                              child: Transform(
+                                transform: Matrix4.identity()
+                                  ..translate(_offset.dx, _offset.dy)
+                                  ..scale(_scale),
+                                child: CustomPaint(
+                                  size: canvasSize,
+                                  painter: ImageCanvasPainter(
+                                    image: _showingOriginal && _originalDisplayImage != null
+                                        ? _originalDisplayImage!
+                                        : _displayImage!,
+                                    currentStroke: _showingOriginal ? [] : _currentStroke,
+                                    brushSize: _brushSize,
+                                    tool: _currentTool,
+                                    drawMode: _drawMode,
+                                    shapeStart: _showingOriginal ? null : _shapeStart,
+                                    shapeEnd: _showingOriginal ? null : _shapeEnd,
+                                    highlighterColor: _highlighterColor,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
+                          // 원본 표시 중 오버레이
+                          if (_showingOriginal)
+                            Positioned(
+                              top: 16,
+                              left: 0,
+                              right: 0,
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.7),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.visibility, color: Colors.white, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('원본', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       );
                     },
                   ),
