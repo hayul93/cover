@@ -1480,32 +1480,27 @@ class _EditorScreenState extends State<EditorScreen> {
           onTap: () {
             setState(() => _selectedStickerIndex = index);
           },
-          onPanStart: (details) {
+          onScaleStart: (details) {
             setState(() {
               _selectedStickerIndex = index;
               _stickerDragStart = sticker.position;
             });
+            _initialStickerScale = sticker.scale;
           },
-          onPanUpdate: (details) {
+          onScaleUpdate: (details) {
             if (_selectedStickerIndex == index) {
               setState(() {
-                // 드래그 델타를 정규화된 좌표로 변환
-                final dx = details.delta.dx / (imageWidth * _scale);
-                final dy = details.delta.dy / (imageHeight * _scale);
+                // 드래그: focalPointDelta를 정규화된 좌표로 변환
+                final dx = details.focalPointDelta.dx / (imageWidth * _scale);
+                final dy = details.focalPointDelta.dy / (imageHeight * _scale);
                 sticker.position = Offset(
                   (sticker.position.dx + dx).clamp(0.0, 1.0),
                   (sticker.position.dy + dy).clamp(0.0, 1.0),
                 );
-              });
-            }
-          },
-          onScaleStart: (details) {
-            _initialStickerScale = sticker.scale;
-          },
-          onScaleUpdate: (details) {
-            if (_selectedStickerIndex == index && details.scale != 1.0) {
-              setState(() {
-                sticker.scale = (_initialStickerScale * details.scale).clamp(0.5, 3.0);
+                // 스케일 (두 손가락 제스처)
+                if (details.scale != 1.0) {
+                  sticker.scale = (_initialStickerScale * details.scale).clamp(0.5, 3.0);
+                }
               });
             }
           },
