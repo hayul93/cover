@@ -1026,8 +1026,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 1. 도구 + 모드 선택 (한 줄)
-                    // 도구 선택 - 2줄 그리드
+                    // 1. 도구 선택 - 2줄 그리드
                     Column(
                       children: [
                         // 1행: 블러, 모자이크, 검은바
@@ -1054,80 +1053,70 @@ class _EditorScreenState extends State<EditorScreen> {
                       ],
                     ),
 
-                    // 모드 선택 (스티커 제외)
-                    if (_currentTool != EditTool.sticker) ...[
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('모드 ', style: TextStyle(color: Colors.white54, fontSize: 11)),
-                          const SizedBox(width: 8),
-                          _buildCompactModeChip(DrawMode.brush, Icons.brush),
-                          _buildCompactModeChip(DrawMode.rectangle, Icons.crop_square),
-                          _buildCompactModeChip(DrawMode.circle, Icons.circle_outlined),
-                        ],
-                      ),
-                    ],
-
                     const SizedBox(height: 10),
 
-                    // 2. 색상 선택 (형광펜일 때만)
-                    if (_currentTool == EditTool.highlighter)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: SizedBox(
-                          height: 32,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('색상 ', style: TextStyle(color: Colors.white54, fontSize: 11)),
-                              const SizedBox(width: 8),
-                              _buildColorChip(Colors.yellow, '노랑'),
-                              const SizedBox(width: 6),
-                              _buildColorChip(Colors.greenAccent, '초록'),
-                              const SizedBox(width: 6),
-                              _buildColorChip(Colors.pinkAccent, '분홍'),
-                              const SizedBox(width: 6),
-                              _buildColorChip(Colors.cyanAccent, '하늘'),
-                              const SizedBox(width: 6),
-                              _buildColorChip(Colors.orangeAccent, '주황'),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    // 3. 크기 + 강도 슬라이더 (스티커 모드가 아닐 때)
-                    if (_currentTool != EditTool.sticker) ...[
-                      _buildSliderRow(
-                        label: '크기',
-                        value: _brushSize,
-                        min: 10,
-                        max: 120,
-                        displayValue: '${_brushSize.toInt()}',
-                        onChanged: (v) => setState(() => _brushSize = v),
-                        presets: true,
-                      ),
-
-                      const SizedBox(height: 6),
-
-                      _buildSliderRow(
-                        label: '강도',
-                        value: _intensity,
-                        min: 0.1,
-                        max: 1.0,
-                        displayValue: '${(_intensity * 100).toInt()}%',
-                        onChanged: (v) => setState(() => _intensity = v),
-                        enabled: _currentTool != EditTool.eraser && _currentTool != EditTool.blackBar,
-                      ),
-                    ],
-
-                    // 3. 스티커 UI (스티커 모드일 때)
-                    if (_currentTool == EditTool.sticker)
-                      _buildStickerControls(),
+                    // 2. 옵션 영역 - 고정 높이로 레이아웃 유지
+                    SizedBox(
+                      height: 130,
+                      child: _currentTool == EditTool.sticker
+                          ? _buildStickerControls()
+                          : Column(
+                              children: [
+                                // 모드 선택
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Text('모드 ', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                                    const SizedBox(width: 8),
+                                    _buildCompactModeChip(DrawMode.brush, Icons.brush),
+                                    _buildCompactModeChip(DrawMode.rectangle, Icons.crop_square),
+                                    _buildCompactModeChip(DrawMode.circle, Icons.circle_outlined),
+                                    // 색상 선택 (형광펜일 때만)
+                                    if (_currentTool == EditTool.highlighter) ...[
+                                      const SizedBox(width: 12),
+                                      Container(width: 1, height: 24, color: Colors.white24),
+                                      const SizedBox(width: 12),
+                                      _buildColorChip(Colors.yellow, '노랑'),
+                                      const SizedBox(width: 4),
+                                      _buildColorChip(Colors.greenAccent, '초록'),
+                                      const SizedBox(width: 4),
+                                      _buildColorChip(Colors.pinkAccent, '분홍'),
+                                      const SizedBox(width: 4),
+                                      _buildColorChip(Colors.cyanAccent, '하늘'),
+                                      const SizedBox(width: 4),
+                                      _buildColorChip(Colors.orangeAccent, '주황'),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                // 크기 슬라이더
+                                _buildSliderRow(
+                                  label: '크기',
+                                  value: _brushSize,
+                                  min: 10,
+                                  max: 120,
+                                  displayValue: '${_brushSize.toInt()}',
+                                  onChanged: (v) => setState(() => _brushSize = v),
+                                  presets: true,
+                                ),
+                                const SizedBox(height: 6),
+                                // 강도 슬라이더
+                                _buildSliderRow(
+                                  label: '강도',
+                                  value: _intensity,
+                                  min: 0.1,
+                                  max: 1.0,
+                                  displayValue: '${(_intensity * 100).toInt()}%',
+                                  onChanged: (v) => setState(() => _intensity = v),
+                                  enabled: _currentTool != EditTool.eraser && _currentTool != EditTool.blackBar,
+                                ),
+                              ],
+                            ),
+                    ),
 
                     const SizedBox(height: 12),
 
-                    // 4. 저장/공유 버튼
+                    // 3. 저장/공유 버튼
                     SizedBox(
                       height: 44,
                       child: Row(
