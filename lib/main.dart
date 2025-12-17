@@ -1027,38 +1027,47 @@ class _EditorScreenState extends State<EditorScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // 1. 도구 + 모드 선택 (한 줄)
-                    SizedBox(
-                      height: 40,
-                      child: Row(
+                    // 도구 선택 - 2줄 그리드
+                    Column(
+                      children: [
+                        // 1행: 블러, 모자이크, 검은바
+                        Row(
+                          children: [
+                            Expanded(child: _buildGridToolChip(EditTool.blur, Icons.blur_on, '블러')),
+                            const SizedBox(width: 8),
+                            Expanded(child: _buildGridToolChip(EditTool.mosaic, Icons.grid_view, '모자이크')),
+                            const SizedBox(width: 8),
+                            Expanded(child: _buildGridToolChip(EditTool.blackBar, Icons.rectangle, '검은바')),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // 2행: 형광펜, 지우개, 스티커
+                        Row(
+                          children: [
+                            Expanded(child: _buildGridToolChip(EditTool.highlighter, Icons.highlight, '형광펜')),
+                            const SizedBox(width: 8),
+                            Expanded(child: _buildGridToolChip(EditTool.eraser, Icons.auto_fix_high, '지우개')),
+                            const SizedBox(width: 8),
+                            Expanded(child: _buildGridToolChip(EditTool.sticker, Icons.emoji_emotions, '스티커')),
+                          ],
+                        ),
+                      ],
+                    ),
+
+                    // 모드 선택 (스티커 제외)
+                    if (_currentTool != EditTool.sticker) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // 도구 선택
-                          Expanded(
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  _buildCompactToolChip(EditTool.blur, '블러'),
-                                  _buildCompactToolChip(EditTool.mosaic, '모자이크'),
-                                  _buildCompactToolChip(EditTool.blackBar, '검은바'),
-                                  _buildCompactToolChip(EditTool.highlighter, '형광펜'),
-                                  _buildCompactToolChip(EditTool.eraser, '지우개'),
-                                  _buildCompactToolChip(EditTool.sticker, '스티커'),
-                                  if (_currentTool != EditTool.sticker) ...[
-                                    const SizedBox(width: 8),
-                                    Container(width: 1, height: 24, color: Colors.white24),
-                                    const SizedBox(width: 8),
-                                    // 모드 선택
-                                    _buildCompactModeChip(DrawMode.brush, Icons.brush),
-                                    _buildCompactModeChip(DrawMode.rectangle, Icons.crop_square),
-                                    _buildCompactModeChip(DrawMode.circle, Icons.circle_outlined),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ),
+                          const Text('모드 ', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                          const SizedBox(width: 8),
+                          _buildCompactModeChip(DrawMode.brush, Icons.brush),
+                          _buildCompactModeChip(DrawMode.rectangle, Icons.crop_square),
+                          _buildCompactModeChip(DrawMode.circle, Icons.circle_outlined),
                         ],
                       ),
-                    ),
+                    ],
 
                     const SizedBox(height: 10),
 
@@ -1161,31 +1170,39 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  Widget _buildCompactToolChip(EditTool tool, String label) {
+  Widget _buildGridToolChip(EditTool tool, IconData icon, String label) {
     final isSelected = _currentTool == tool;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: GestureDetector(
-        onTap: () {
-          setState(() => _currentTool = tool);
-          if (tool == EditTool.sticker) {
-            _showStickerPicker();
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF2196F3) : Colors.white.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
+    return GestureDetector(
+      onTap: () {
+        setState(() => _currentTool = tool);
+        if (tool == EditTool.sticker) {
+          _showStickerPicker();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF2196F3) : Colors.white.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
               color: isSelected ? Colors.white : Colors.white70,
-              fontSize: 13,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              size: 20,
             ),
-          ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white70,
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
         ),
       ),
     );
