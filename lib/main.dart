@@ -860,174 +860,135 @@ class _EditorScreenState extends State<EditorScreen> {
           if (_isProcessing)
             const LinearProgressIndicator(color: Color(0xFF2196F3)),
 
-          // 하단 컨트롤
+          // 하단 컨트롤 (고정 컴팩트 UI)
           Container(
             color: const Color(0xFF1A1A1A),
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 도구 선택 (스크롤 가능)
-                SizedBox(
-                  height: 80,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      _buildToolButton(EditTool.blur, Icons.blur_on, '블러'),
-                      const SizedBox(width: 8),
-                      _buildToolButton(EditTool.mosaic, Icons.grid_on, '모자이크'),
-                      const SizedBox(width: 8),
-                      _buildToolButton(EditTool.blackBar, Icons.rectangle, '검은바'),
-                      const SizedBox(width: 8),
-                      _buildToolButton(EditTool.highlighter, Icons.highlight, '형광펜'),
-                      const SizedBox(width: 8),
-                      _buildToolButton(EditTool.eraser, Icons.auto_fix_off, '지우개'),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                // 그리기 모드 선택 (블러, 모자이크, 검은바에서만 표시)
-                if (_currentTool == EditTool.blur ||
-                    _currentTool == EditTool.mosaic ||
-                    _currentTool == EditTool.blackBar)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildModeChip(DrawMode.brush, Icons.brush, '브러시'),
-                      const SizedBox(width: 8),
-                      _buildModeChip(DrawMode.rectangle, Icons.crop_square, '사각형'),
-                      const SizedBox(width: 8),
-                      _buildModeChip(DrawMode.circle, Icons.circle_outlined, '원형'),
-                    ],
-                  ),
-
-                // 형광펜 색상 선택
-                if (_currentTool == EditTool.highlighter)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildColorChip(Colors.yellow, '노랑'),
-                      const SizedBox(width: 8),
-                      _buildColorChip(Colors.greenAccent, '초록'),
-                      const SizedBox(width: 8),
-                      _buildColorChip(Colors.pinkAccent, '분홍'),
-                      const SizedBox(width: 8),
-                      _buildColorChip(Colors.cyanAccent, '하늘'),
-                      const SizedBox(width: 8),
-                      _buildColorChip(Colors.orangeAccent, '주황'),
-                    ],
-                  ),
-
-                const SizedBox(height: 12),
-
-                // 브러시 프리셋
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    for (final preset in BrushPreset.values)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: _buildPresetButton(preset),
-                      ),
-                  ],
-                ),
-
-                const SizedBox(height: 8),
-
-                // 브러시 크기 슬라이더
-                Row(
-                  children: [
-                    const SizedBox(width: 8),
-                    const Icon(Icons.brush, color: Colors.white54, size: 20),
-                    Expanded(
-                      child: Slider(
-                        value: _brushSize,
-                        min: 10,
-                        max: 120,
-                        activeColor: const Color(0xFF2196F3),
-                        inactiveColor: Colors.white24,
-                        onChanged: (v) => setState(() => _brushSize = v),
-                      ),
-                    ),
+                    // 1. 도구 + 모드 선택 (한 줄)
                     SizedBox(
-                      width: 40,
-                      child: Text(
-                        _brushSize.toInt().toString(),
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      height: 40,
+                      child: Row(
+                        children: [
+                          // 도구 선택
+                          Expanded(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  _buildCompactToolChip(EditTool.blur, '블러'),
+                                  _buildCompactToolChip(EditTool.mosaic, '모자이크'),
+                                  _buildCompactToolChip(EditTool.blackBar, '검은바'),
+                                  _buildCompactToolChip(EditTool.highlighter, '형광펜'),
+                                  _buildCompactToolChip(EditTool.eraser, '지우개'),
+                                  const SizedBox(width: 8),
+                                  Container(width: 1, height: 24, color: Colors.white24),
+                                  const SizedBox(width: 8),
+                                  // 모드 선택
+                                  _buildCompactModeChip(DrawMode.brush, Icons.brush),
+                                  _buildCompactModeChip(DrawMode.rectangle, Icons.crop_square),
+                                  _buildCompactModeChip(DrawMode.circle, Icons.circle_outlined),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // 2. 색상 선택 (형광펜일 때만)
+                    if (_currentTool == EditTool.highlighter)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: SizedBox(
+                          height: 32,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text('색상 ', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                              const SizedBox(width: 8),
+                              _buildColorChip(Colors.yellow, '노랑'),
+                              const SizedBox(width: 6),
+                              _buildColorChip(Colors.greenAccent, '초록'),
+                              const SizedBox(width: 6),
+                              _buildColorChip(Colors.pinkAccent, '분홍'),
+                              const SizedBox(width: 6),
+                              _buildColorChip(Colors.cyanAccent, '하늘'),
+                              const SizedBox(width: 6),
+                              _buildColorChip(Colors.orangeAccent, '주황'),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // 3. 크기 + 강도 슬라이더 (한 줄씩)
+                    _buildSliderRow(
+                      label: '크기',
+                      value: _brushSize,
+                      min: 10,
+                      max: 120,
+                      displayValue: '${_brushSize.toInt()}',
+                      onChanged: (v) => setState(() => _brushSize = v),
+                      presets: true,
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    _buildSliderRow(
+                      label: '강도',
+                      value: _intensity,
+                      min: 0.1,
+                      max: 1.0,
+                      displayValue: '${(_intensity * 100).toInt()}%',
+                      onChanged: (v) => setState(() => _intensity = v),
+                      enabled: _currentTool != EditTool.eraser && _currentTool != EditTool.blackBar,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // 4. 저장/공유 버튼
+                    SizedBox(
+                      height: 44,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _isProcessing ? null : _saveImage,
+                              icon: const Icon(Icons.save_alt, size: 18),
+                              label: const Text('저장', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2196F3),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _isProcessing ? null : _shareImage,
+                              icon: const Icon(Icons.share, size: 18),
+                              label: const Text('공유', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white38),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-
-                // 강도 슬라이더 (지우개, 검은바 제외)
-                if (_currentTool != EditTool.eraser && _currentTool != EditTool.blackBar)
-                  Row(
-                    children: [
-                      const SizedBox(width: 8),
-                      const Icon(Icons.opacity, color: Colors.white54, size: 20),
-                      Expanded(
-                        child: Slider(
-                          value: _intensity,
-                          min: 0.1,
-                          max: 1.0,
-                          activeColor: const Color(0xFF2196F3),
-                          inactiveColor: Colors.white24,
-                          onChanged: (v) => setState(() => _intensity = v),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 40,
-                        child: Text(
-                          '${(_intensity * 100).toInt()}%',
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                const SizedBox(height: 12),
-
-                // 저장/공유 버튼
-                Row(
-                  children: [
-                    // 저장 버튼
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton.icon(
-                          onPressed: _isProcessing ? null : _saveImage,
-                          icon: const Icon(Icons.save_alt, size: 20),
-                          label: const Text('저장', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2196F3),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // 공유 버튼
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: OutlinedButton.icon(
-                          onPressed: _isProcessing ? null : _shareImage,
-                          icon: const Icon(Icons.share, size: 20),
-                          label: const Text('공유', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Colors.white38),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -1035,23 +996,106 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  Widget _buildModeChip(DrawMode mode, IconData icon, String label) {
-    final isSelected = _drawMode == mode;
-    return GestureDetector(
-      onTap: () => setState(() => _drawMode = mode),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF2196F3) : Colors.white12,
-          borderRadius: BorderRadius.circular(16),
+  Widget _buildCompactToolChip(EditTool tool, String label) {
+    final isSelected = _currentTool == tool;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: GestureDetector(
+        onTap: () => setState(() => _currentTool = tool),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF2196F3) : Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.white70,
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: isSelected ? Colors.white : Colors.white70, size: 16),
-            const SizedBox(width: 4),
-            Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.white70, fontSize: 12)),
-          ],
+      ),
+    );
+  }
+
+  Widget _buildCompactModeChip(DrawMode mode, IconData icon) {
+    final isSelected = _drawMode == mode;
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: GestureDetector(
+        onTap: () => setState(() => _drawMode = mode),
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF2196F3) : Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: isSelected ? Colors.white : Colors.white70, size: 18),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSliderRow({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required String displayValue,
+    required ValueChanged<double> onChanged,
+    bool enabled = true,
+    bool presets = false,
+  }) {
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.3,
+      child: IgnorePointer(
+        ignoring: !enabled,
+        child: SizedBox(
+          height: 32,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 30,
+                child: Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              ),
+              if (presets) ...[
+                for (final preset in BrushPreset.values)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: _buildPresetButton(preset),
+                  ),
+              ],
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                  ),
+                  child: Slider(
+                    value: value,
+                    min: min,
+                    max: max,
+                    activeColor: const Color(0xFF2196F3),
+                    inactiveColor: Colors.white24,
+                    onChanged: onChanged,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 36,
+                child: Text(
+                  displayValue,
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1097,29 +1141,6 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildToolButton(EditTool tool, IconData icon, String label) {
-    final isSelected = _currentTool == tool;
-    return GestureDetector(
-      onTap: () => setState(() => _currentTool = tool),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF2196F3) : Colors.white12,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: isSelected ? Colors.white : Colors.white70, size: 28),
-          ),
-          const SizedBox(height: 6),
-          Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.white70, fontSize: 12)),
-        ],
       ),
     );
   }
