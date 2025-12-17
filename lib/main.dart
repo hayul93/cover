@@ -365,6 +365,50 @@ enum DrawMode { brush, rectangle, circle }
 // 브러시 프리셋
 enum BrushPreset { small, medium, large }
 
+// 이미지 품질 프리셋
+enum ImageQuality { low, medium, high, original }
+
+extension ImageQualitySettings on ImageQuality {
+  int get jpegQuality {
+    switch (this) {
+      case ImageQuality.low:
+        return 60;
+      case ImageQuality.medium:
+        return 80;
+      case ImageQuality.high:
+        return 90;
+      case ImageQuality.original:
+        return 100;
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case ImageQuality.low:
+        return '낮음';
+      case ImageQuality.medium:
+        return '중간';
+      case ImageQuality.high:
+        return '높음';
+      case ImageQuality.original:
+        return '원본';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case ImageQuality.low:
+        return '60% • 파일 크기 최소';
+      case ImageQuality.medium:
+        return '80% • 균형잡힌 품질';
+      case ImageQuality.high:
+        return '90% • 고품질';
+      case ImageQuality.original:
+        return '100% • 최고 품질';
+    }
+  }
+}
+
 extension BrushPresetSize on BrushPreset {
   double get size {
     switch (this) {
@@ -1007,7 +1051,7 @@ class _EditorScreenState extends State<EditorScreen> {
                         children: [
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed: _isProcessing ? null : _saveImage,
+                              onPressed: _isProcessing ? null : _showSaveOptionsDialog,
                               icon: const Icon(Icons.save_alt, size: 18),
                               label: const Text('저장', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                               style: ElevatedButton.styleFrom(
@@ -1192,7 +1236,163 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  Future<void> _saveImage() async {
+  void _showSaveOptionsDialog() {
+    if (_currentBytes == null) return;
+
+    // 예상 파일 크기 계산
+    final originalSize = _currentBytes!.length;
+    String estimateSize(ImageQuality quality) {
+      final estimatedBytes = (originalSize * quality.jpegQuality / 100).round();
+      if (estimatedBytes < 1024) {
+        return '$estimatedBytes B';
+      } else if (estimatedBytes < 1024 * 1024) {
+        return '${(estimatedBytes / 1024).toStringAsFixed(1)} KB';
+      } else {
+        return '${(estimatedBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 핸들
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // 타이틀
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Icon(Icons.high_quality, color: Colors.white, size: 24),
+                    SizedBox(width: 12),
+                    Text(
+                      '저장 품질 선택',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 품질 옵션
+              ...ImageQuality.values.map((quality) => _buildQualityOption(
+                    quality,
+                    estimateSize(quality),
+                  )),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQualityOption(ImageQuality quality, String estimatedSize) {
+    final isRecommended = quality == ImageQuality.high;
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context);
+        _saveImageWithQuality(quality);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: isRecommended
+                    ? const Color(0xFF2196F3).withValues(alpha: 0.2)
+                    : Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  '${quality.jpegQuality}%',
+                  style: TextStyle(
+                    color: isRecommended ? const Color(0xFF2196F3) : Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        quality.label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (isRecommended) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2196F3),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            '추천',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    quality.description,
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              '~$estimatedSize',
+              style: const TextStyle(color: Colors.white54, fontSize: 13),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, color: Colors.white38, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveImageWithQuality(ImageQuality quality) async {
     if (_currentBytes == null) return;
 
     setState(() => _isProcessing = true);
@@ -1205,7 +1405,7 @@ class _EditorScreenState extends State<EditorScreen> {
       // 갤러리에 저장
       final result = await ImageGallerySaver.saveImage(
         _currentBytes!,
-        quality: 100,
+        quality: quality.jpegQuality,
         name: fileName,
       );
 
@@ -1215,12 +1415,12 @@ class _EditorScreenState extends State<EditorScreen> {
           await RecentImages.addImage(widget.imageFile.path);
 
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Row(
                 children: [
-                  Icon(Icons.check_circle, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('갤러리에 저장되었습니다'),
+                  const Icon(Icons.check_circle, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text('${quality.label} 품질로 저장되었습니다'),
                 ],
               ),
               backgroundColor: Colors.green,
