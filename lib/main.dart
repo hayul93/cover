@@ -4,13 +4,48 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// 테마 모드 관리
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
+
+// 최근 편집 이미지 관리
+class RecentImages {
+  static const String _key = 'recent_images';
+  static const int _maxImages = 20;
+
+  static Future<List<String>> getRecentImages() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_key) ?? [];
+  }
+
+  static Future<void> addImage(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    final images = prefs.getStringList(_key) ?? [];
+    images.remove(path);
+    images.insert(0, path);
+    if (images.length > _maxImages) {
+      images.removeRange(_maxImages, images.length);
+    }
+    await prefs.setStringList(_key, images);
+  }
+
+  static Future<void> removeImage(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    final images = prefs.getStringList(_key) ?? [];
+    images.remove(path);
+    await prefs.setStringList(_key, images);
+  }
+}
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const CoverApp());
 }
 
@@ -19,18 +54,31 @@ class CoverApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Cover',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2196F3),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-        scaffoldBackgroundColor: Colors.black,
-      ),
-      home: const HomeScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (context, themeMode, child) {
+        return MaterialApp(
+          title: 'Cover',
+          debugShowCheckedModeBanner: false,
+          themeMode: themeMode,
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF2196F3),
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF2196F3),
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+            scaffoldBackgroundColor: Colors.black,
+          ),
+          home: const HomeScreen(),
+        );
+      },
     );
   }
 }
@@ -47,6 +95,27 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final ImagePicker _picker = ImagePicker();
   bool _isLoading = false;
+  List<String> _recentImages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecentImages();
+  }
+
+  Future<void> _loadRecentImages() async {
+    final images = await RecentImages.getRecentImages();
+    // 존재하는 파일만 필터링
+    final existingImages = <String>[];
+    for (final path in images) {
+      if (await File(path).exists()) {
+        existingImages.add(path);
+      }
+    }
+    if (mounted) {
+      setState(() => _recentImages = existingImages);
+    }
+  }
 
   Future<void> _pickFromGallery() async {
     if (_isLoading) return;
@@ -106,24 +175,64 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _openRecentImage(String path) async {
+    final file = File(path);
+    if (await file.exists()) {
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EditorScreen(imageFile: file),
+          ),
+        ).then((_) => _loadRecentImages());
+      }
+    } else {
+      await RecentImages.removeImage(path);
+      _loadRecentImages();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('파일을 찾을 수 없습니다')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.white70 : Colors.black54;
+
     return Scaffold(
       body: SafeArea(
         child: Stack(
           children: [
-            Center(
+            // 설정 버튼
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: Icon(Icons.settings_outlined, color: subtitleColor),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  );
+                },
+              ),
+            ),
+            SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(32.0),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
+                    const SizedBox(height: 40),
+                    Text(
                       'Cover',
                       style: TextStyle(
                         fontSize: 48,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: textColor,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -131,10 +240,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       '개인정보를 안전하게',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.white.withValues(alpha: 0.7),
+                        color: subtitleColor,
                       ),
                     ),
-                    const SizedBox(height: 64),
+                    const SizedBox(height: 48),
                     SizedBox(
                       width: double.infinity,
                       height: 56,
@@ -158,12 +267,78 @@ class _HomeScreenState extends State<HomeScreen> {
                         icon: const Icon(Icons.camera_alt_rounded),
                         label: const Text('카메라', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+                          foregroundColor: textColor,
+                          side: BorderSide(color: subtitleColor),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
                         ),
                       ),
                     ),
+
+                    // 최근 편집 이미지
+                    if (_recentImages.isNotEmpty) ...[
+                      const SizedBox(height: 48),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '최근 이미지',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: textColor,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.remove('recent_images');
+                              _loadRecentImages();
+                            },
+                            child: Text(
+                              '모두 지우기',
+                              style: TextStyle(color: subtitleColor, fontSize: 14),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        height: 120,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _recentImages.length,
+                          itemBuilder: (context, index) {
+                            final path = _recentImages[index];
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                right: index < _recentImages.length - 1 ? 12 : 0,
+                              ),
+                              child: GestureDetector(
+                                onTap: () => _openRecentImage(path),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: SizedBox(
+                                    width: 120,
+                                    height: 120,
+                                    child: Image.file(
+                                      File(path),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(
+                                          color: Colors.grey[800],
+                                          child: const Icon(Icons.broken_image, color: Colors.white38),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 32),
                   ],
                 ),
               ),
@@ -182,7 +357,36 @@ class _HomeScreenState extends State<HomeScreen> {
 
 // ==================== Editor Screen ====================
 
-enum EditTool { blur, mosaic, eraser }
+enum EditTool { blur, mosaic, eraser, blackBar, highlighter }
+
+enum DrawMode { brush, rectangle, circle }
+
+// 브러시 프리셋
+enum BrushPreset { small, medium, large }
+
+extension BrushPresetSize on BrushPreset {
+  double get size {
+    switch (this) {
+      case BrushPreset.small:
+        return 25.0;
+      case BrushPreset.medium:
+        return 50.0;
+      case BrushPreset.large:
+        return 80.0;
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case BrushPreset.small:
+        return 'S';
+      case BrushPreset.medium:
+        return 'M';
+      case BrushPreset.large:
+        return 'L';
+    }
+  }
+}
 
 class EditorScreen extends StatefulWidget {
   final File imageFile;
@@ -200,12 +404,27 @@ class _EditorScreenState extends State<EditorScreen> {
 
   // 편집 상태
   EditTool _currentTool = EditTool.blur;
+  DrawMode _drawMode = DrawMode.brush;
   double _brushSize = 40.0;
   double _intensity = 0.5;
   bool _isProcessing = false;
+  Color _highlighterColor = Colors.yellow;
 
   // 현재 스트로크
   List<Offset> _currentStroke = [];
+
+  // 도형 그리기용
+  Offset? _shapeStart;
+  Offset? _shapeEnd;
+
+  // 핀치 줌
+  double _scale = 1.0;
+  double _previousScale = 1.0;
+  Offset _offset = Offset.zero;
+  Offset _previousOffset = Offset.zero;
+
+  // 이미지 회전
+  int _rotation = 0; // 0, 90, 180, 270
 
   // Undo/Redo 스택
   final List<Uint8List> _undoStack = [];
@@ -274,7 +493,12 @@ class _EditorScreenState extends State<EditorScreen> {
     final imagePoint = _canvasToImage(details.localPosition, canvasSize);
     if (imagePoint != null) {
       setState(() {
-        _currentStroke = [imagePoint];
+        if (_drawMode == DrawMode.brush) {
+          _currentStroke = [imagePoint];
+        } else {
+          _shapeStart = imagePoint;
+          _shapeEnd = imagePoint;
+        }
       });
     }
   }
@@ -285,13 +509,19 @@ class _EditorScreenState extends State<EditorScreen> {
     final imagePoint = _canvasToImage(details.localPosition, canvasSize);
     if (imagePoint != null) {
       setState(() {
-        _currentStroke.add(imagePoint);
+        if (_drawMode == DrawMode.brush) {
+          _currentStroke.add(imagePoint);
+        } else {
+          _shapeEnd = imagePoint;
+        }
       });
     }
   }
 
   void _onPanEnd(DragEndDetails details) async {
-    if (_currentStroke.isEmpty || _currentBytes == null) return;
+    if (_drawMode == DrawMode.brush && _currentStroke.isEmpty) return;
+    if (_drawMode != DrawMode.brush && (_shapeStart == null || _shapeEnd == null)) return;
+    if (_currentBytes == null) return;
 
     setState(() => _isProcessing = true);
 
@@ -301,14 +531,20 @@ class _EditorScreenState extends State<EditorScreen> {
       _redoStack.clear();
       if (_undoStack.length > 10) _undoStack.removeAt(0);
 
-      // 블러/모자이크 적용
+      // 처리 요청 생성
       final request = ProcessRequest(
         imageBytes: _currentBytes!,
-        points: _currentStroke.map((p) => [p.dx, p.dy]).toList(),
+        points: _drawMode == DrawMode.brush
+            ? _currentStroke.map((p) => [p.dx, p.dy]).toList()
+            : [],
         brushSize: _brushSize,
         intensity: _intensity,
         tool: _currentTool,
         originalBytes: _originalBytes!,
+        drawMode: _drawMode,
+        shapeStart: _shapeStart != null ? [_shapeStart!.dx, _shapeStart!.dy] : null,
+        shapeEnd: _shapeEnd != null ? [_shapeEnd!.dx, _shapeEnd!.dy] : null,
+        highlighterColor: _highlighterColor.toARGB32(),
       );
 
       final processedBytes = await compute(_processImage, request);
@@ -325,10 +561,49 @@ class _EditorScreenState extends State<EditorScreen> {
       if (mounted) {
         setState(() {
           _currentStroke = [];
+          _shapeStart = null;
+          _shapeEnd = null;
           _isProcessing = false;
         });
       }
     }
+  }
+
+  void _rotateImage() async {
+    if (_currentBytes == null || _isProcessing) return;
+
+    setState(() => _isProcessing = true);
+
+    try {
+      _undoStack.add(_currentBytes!);
+      _redoStack.clear();
+      if (_undoStack.length > 10) _undoStack.removeAt(0);
+
+      final rotatedBytes = await compute(_rotateImageBytes, _currentBytes!);
+      _currentBytes = rotatedBytes;
+
+      // 원본도 회전 (지우개가 올바르게 동작하도록)
+      _originalBytes = await compute(_rotateImageBytes, _originalBytes!);
+
+      await _updateDisplayImage(rotatedBytes);
+
+      setState(() => _rotation = (_rotation + 90) % 360);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('회전 실패: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  void _resetZoom() {
+    setState(() {
+      _scale = 1.0;
+      _offset = Offset.zero;
+    });
   }
 
   Offset? _canvasToImage(Offset canvasPoint, Size canvasSize) {
@@ -391,6 +666,19 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
         title: const Text('편집', style: TextStyle(color: Colors.white)),
         actions: [
+          // 회전 버튼
+          IconButton(
+            icon: const Icon(Icons.rotate_right, color: Colors.white),
+            onPressed: _rotateImage,
+            tooltip: '회전',
+          ),
+          // 줌 리셋
+          if (_scale != 1.0)
+            IconButton(
+              icon: const Icon(Icons.fit_screen, color: Colors.white),
+              onPressed: _resetZoom,
+              tooltip: '원래 크기',
+            ),
           IconButton(
             icon: Icon(Icons.undo, color: _undoStack.isNotEmpty ? Colors.white : Colors.white38),
             onPressed: _undoStack.isNotEmpty ? _undo : null,
@@ -411,16 +699,51 @@ class _EditorScreenState extends State<EditorScreen> {
                     builder: (context, constraints) {
                       final canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
                       return GestureDetector(
-                        onPanStart: (d) => _onPanStart(d, canvasSize),
-                        onPanUpdate: (d) => _onPanUpdate(d, canvasSize),
-                        onPanEnd: _onPanEnd,
-                        child: CustomPaint(
-                          size: canvasSize,
-                          painter: ImageCanvasPainter(
-                            image: _displayImage!,
-                            currentStroke: _currentStroke,
-                            brushSize: _brushSize,
-                            tool: _currentTool,
+                        onScaleStart: (details) {
+                          _previousScale = _scale;
+                          _previousOffset = _offset;
+                          if (details.pointerCount == 1) {
+                            _onPanStart(DragStartDetails(localPosition: details.localFocalPoint), canvasSize);
+                          }
+                        },
+                        onScaleUpdate: (details) {
+                          if (details.pointerCount == 2) {
+                            // 핀치 줌
+                            setState(() {
+                              _scale = (_previousScale * details.scale).clamp(0.5, 4.0);
+                              _offset = details.localFocalPoint - (_previousOffset + details.localFocalPoint) * details.scale + _previousOffset;
+                            });
+                          } else if (details.pointerCount == 1) {
+                            _onPanUpdate(DragUpdateDetails(
+                              localPosition: details.localFocalPoint,
+                              globalPosition: details.focalPoint,
+                              delta: details.focalPointDelta,
+                            ), canvasSize);
+                          }
+                        },
+                        onScaleEnd: (details) {
+                          if (details.pointerCount <= 1) {
+                            _onPanEnd(DragEndDetails());
+                          }
+                        },
+                        child: ClipRect(
+                          child: Transform(
+                            transform: Matrix4.identity()
+                              ..translate(_offset.dx, _offset.dy)
+                              ..scale(_scale),
+                            child: CustomPaint(
+                              size: canvasSize,
+                              painter: ImageCanvasPainter(
+                                image: _displayImage!,
+                                currentStroke: _currentStroke,
+                                brushSize: _brushSize,
+                                tool: _currentTool,
+                                drawMode: _drawMode,
+                                shapeStart: _shapeStart,
+                                shapeEnd: _shapeEnd,
+                                highlighterColor: _highlighterColor,
+                              ),
+                            ),
                           ),
                         ),
                       );
@@ -435,22 +758,80 @@ class _EditorScreenState extends State<EditorScreen> {
           // 하단 컨트롤
           Container(
             color: const Color(0xFF1A1A1A),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 도구 선택
+                // 도구 선택 (스크롤 가능)
+                SizedBox(
+                  height: 80,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _buildToolButton(EditTool.blur, Icons.blur_on, '블러'),
+                      const SizedBox(width: 8),
+                      _buildToolButton(EditTool.mosaic, Icons.grid_on, '모자이크'),
+                      const SizedBox(width: 8),
+                      _buildToolButton(EditTool.blackBar, Icons.rectangle, '검은바'),
+                      const SizedBox(width: 8),
+                      _buildToolButton(EditTool.highlighter, Icons.highlight, '형광펜'),
+                      const SizedBox(width: 8),
+                      _buildToolButton(EditTool.eraser, Icons.auto_fix_off, '지우개'),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // 그리기 모드 선택 (블러, 모자이크, 검은바에서만 표시)
+                if (_currentTool == EditTool.blur ||
+                    _currentTool == EditTool.mosaic ||
+                    _currentTool == EditTool.blackBar)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildModeChip(DrawMode.brush, Icons.brush, '브러시'),
+                      const SizedBox(width: 8),
+                      _buildModeChip(DrawMode.rectangle, Icons.crop_square, '사각형'),
+                      const SizedBox(width: 8),
+                      _buildModeChip(DrawMode.circle, Icons.circle_outlined, '원형'),
+                    ],
+                  ),
+
+                // 형광펜 색상 선택
+                if (_currentTool == EditTool.highlighter)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildColorChip(Colors.yellow, '노랑'),
+                      const SizedBox(width: 8),
+                      _buildColorChip(Colors.greenAccent, '초록'),
+                      const SizedBox(width: 8),
+                      _buildColorChip(Colors.pinkAccent, '분홍'),
+                      const SizedBox(width: 8),
+                      _buildColorChip(Colors.cyanAccent, '하늘'),
+                      const SizedBox(width: 8),
+                      _buildColorChip(Colors.orangeAccent, '주황'),
+                    ],
+                  ),
+
+                const SizedBox(height: 12),
+
+                // 브러시 프리셋
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildToolButton(EditTool.blur, Icons.blur_on, '블러'),
-                    _buildToolButton(EditTool.mosaic, Icons.grid_on, '모자이크'),
-                    _buildToolButton(EditTool.eraser, Icons.auto_fix_off, '지우개'),
+                    for (final preset in BrushPreset.values)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: _buildPresetButton(preset),
+                      ),
                   ],
                 ),
-                const SizedBox(height: 16),
 
-                // 브러시 크기
+                const SizedBox(height: 8),
+
+                // 브러시 크기 슬라이더
                 Row(
                   children: [
                     const SizedBox(width: 8),
@@ -458,8 +839,8 @@ class _EditorScreenState extends State<EditorScreen> {
                     Expanded(
                       child: Slider(
                         value: _brushSize,
-                        min: 20,
-                        max: 100,
+                        min: 10,
+                        max: 120,
                         activeColor: const Color(0xFF2196F3),
                         inactiveColor: Colors.white24,
                         onChanged: (v) => setState(() => _brushSize = v),
@@ -475,8 +856,8 @@ class _EditorScreenState extends State<EditorScreen> {
                   ],
                 ),
 
-                // 강도 (지우개 제외)
-                if (_currentTool != EditTool.eraser)
+                // 강도 슬라이더 (지우개, 검은바 제외)
+                if (_currentTool != EditTool.eraser && _currentTool != EditTool.blackBar)
                   Row(
                     children: [
                       const SizedBox(width: 8),
@@ -549,6 +930,72 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  Widget _buildModeChip(DrawMode mode, IconData icon, String label) {
+    final isSelected = _drawMode == mode;
+    return GestureDetector(
+      onTap: () => setState(() => _drawMode = mode),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF2196F3) : Colors.white12,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: isSelected ? Colors.white : Colors.white70, size: 16),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.white70, fontSize: 12)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildColorChip(Color color, String label) {
+    final isSelected = _highlighterColor == color;
+    return GestureDetector(
+      onTap: () => setState(() => _highlighterColor = color),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.7),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isSelected ? Colors.white : Colors.transparent,
+            width: 2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPresetButton(BrushPreset preset) {
+    final isSelected = (_brushSize - preset.size).abs() < 5;
+    return GestureDetector(
+      onTap: () => setState(() => _brushSize = preset.size),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF2196F3) : Colors.white12,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Text(
+            preset.label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.white70,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildToolButton(EditTool tool, IconData icon, String label) {
     final isSelected = _currentTool == tool;
     return GestureDetector(
@@ -591,6 +1038,9 @@ class _EditorScreenState extends State<EditorScreen> {
 
       if (mounted) {
         if (result['isSuccess'] == true) {
+          // 최근 이미지에 원본 경로 추가
+          await RecentImages.addImage(widget.imageFile.path);
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Row(
@@ -666,6 +1116,10 @@ class ProcessRequest {
   final double intensity;
   final EditTool tool;
   final Uint8List originalBytes;
+  final DrawMode drawMode;
+  final List<double>? shapeStart;
+  final List<double>? shapeEnd;
+  final int highlighterColor;
 
   ProcessRequest({
     required this.imageBytes,
@@ -674,7 +1128,20 @@ class ProcessRequest {
     required this.intensity,
     required this.tool,
     required this.originalBytes,
+    this.drawMode = DrawMode.brush,
+    this.shapeStart,
+    this.shapeEnd,
+    this.highlighterColor = 0xFFFFFF00,
   });
+}
+
+// 이미지 회전 함수
+Uint8List _rotateImageBytes(Uint8List bytes) {
+  final image = img.decodeImage(bytes);
+  if (image == null) return bytes;
+
+  final rotated = img.copyRotate(image, angle: 90);
+  return Uint8List.fromList(img.encodeJpg(rotated, quality: 90));
 }
 
 Uint8List _processImage(ProcessRequest request) {
@@ -684,19 +1151,53 @@ Uint8List _processImage(ProcessRequest request) {
   final points = request.points.map((p) => Offset(p[0], p[1])).toList();
   final radius = (request.brushSize / 2).toInt();
 
-  switch (request.tool) {
-    case EditTool.blur:
-      _applyBlur(image, points, radius, request.intensity);
-      break;
-    case EditTool.mosaic:
-      _applyMosaic(image, points, radius, request.intensity);
-      break;
-    case EditTool.eraser:
-      final original = img.decodeImage(request.originalBytes);
-      if (original != null) {
-        _applyEraser(image, original, points, radius);
-      }
-      break;
+  // 도형 모드인 경우
+  if (request.drawMode != DrawMode.brush && request.shapeStart != null && request.shapeEnd != null) {
+    final start = Offset(request.shapeStart![0], request.shapeStart![1]);
+    final end = Offset(request.shapeEnd![0], request.shapeEnd![1]);
+
+    switch (request.tool) {
+      case EditTool.blur:
+        _applyShapeBlur(image, start, end, request.drawMode, request.intensity);
+        break;
+      case EditTool.mosaic:
+        _applyShapeMosaic(image, start, end, request.drawMode, request.intensity);
+        break;
+      case EditTool.blackBar:
+        _applyShapeBlackBar(image, start, end, request.drawMode);
+        break;
+      case EditTool.eraser:
+        final original = img.decodeImage(request.originalBytes);
+        if (original != null) {
+          _applyShapeEraser(image, original, start, end, request.drawMode);
+        }
+        break;
+      case EditTool.highlighter:
+        _applyShapeHighlighter(image, start, end, request.drawMode, request.highlighterColor, request.intensity);
+        break;
+    }
+  } else {
+    // 브러시 모드
+    switch (request.tool) {
+      case EditTool.blur:
+        _applyBlur(image, points, radius, request.intensity);
+        break;
+      case EditTool.mosaic:
+        _applyMosaic(image, points, radius, request.intensity);
+        break;
+      case EditTool.blackBar:
+        _applyBlackBar(image, points, radius);
+        break;
+      case EditTool.highlighter:
+        _applyHighlighter(image, points, radius, request.highlighterColor, request.intensity);
+        break;
+      case EditTool.eraser:
+        final original = img.decodeImage(request.originalBytes);
+        if (original != null) {
+          _applyEraser(image, original, points, radius);
+        }
+        break;
+    }
   }
 
   return Uint8List.fromList(img.encodeJpg(image, quality: 90));
@@ -858,6 +1359,215 @@ void _applyEraser(img.Image image, img.Image original, List<Offset> points, int 
   }
 }
 
+// 검은 바 적용 (브러시 모드)
+void _applyBlackBar(img.Image image, List<Offset> points, int radius) {
+  for (final point in points) {
+    final cx = point.dx.toInt();
+    final cy = point.dy.toInt();
+
+    for (int dy = -radius; dy <= radius; dy++) {
+      for (int dx = -radius; dx <= radius; dx++) {
+        final x = cx + dx;
+        final y = cy + dy;
+
+        if (x < 0 || x >= image.width || y < 0 || y >= image.height) continue;
+
+        final dist = sqrt(dx * dx + dy * dy);
+        if (dist <= radius) {
+          image.setPixelRgba(x, y, 0, 0, 0, 255);
+        }
+      }
+    }
+  }
+}
+
+// 형광펜 적용 (브러시 모드)
+void _applyHighlighter(img.Image image, List<Offset> points, int radius, int colorValue, double intensity) {
+  final color = Color(colorValue);
+  final alpha = (intensity * 0.5).clamp(0.2, 0.6);
+  final colorR = (color.r * 255).round().clamp(0, 255);
+  final colorG = (color.g * 255).round().clamp(0, 255);
+  final colorB = (color.b * 255).round().clamp(0, 255);
+
+  for (final point in points) {
+    final cx = point.dx.toInt();
+    final cy = point.dy.toInt();
+
+    for (int dy = -radius; dy <= radius; dy++) {
+      for (int dx = -radius; dx <= radius; dx++) {
+        final x = cx + dx;
+        final y = cy + dy;
+
+        if (x < 0 || x >= image.width || y < 0 || y >= image.height) continue;
+
+        final dist = sqrt(dx * dx + dy * dy);
+        if (dist <= radius) {
+          final pixel = image.getPixel(x, y);
+          final newR = ((pixel.r * (1 - alpha)) + (colorR * alpha)).toInt().clamp(0, 255);
+          final newG = ((pixel.g * (1 - alpha)) + (colorG * alpha)).toInt().clamp(0, 255);
+          final newB = ((pixel.b * (1 - alpha)) + (colorB * alpha)).toInt().clamp(0, 255);
+          image.setPixelRgba(x, y, newR, newG, newB, 255);
+        }
+      }
+    }
+  }
+}
+
+// ==================== 도형 모드 함수들 ====================
+
+bool _isInShape(int x, int y, Offset start, Offset end, DrawMode mode) {
+  final minX = min(start.dx, end.dx).toInt();
+  final maxX = max(start.dx, end.dx).toInt();
+  final minY = min(start.dy, end.dy).toInt();
+  final maxY = max(start.dy, end.dy).toInt();
+
+  if (mode == DrawMode.rectangle) {
+    return x >= minX && x <= maxX && y >= minY && y <= maxY;
+  } else {
+    // 원형 (타원)
+    final centerX = (start.dx + end.dx) / 2;
+    final centerY = (start.dy + end.dy) / 2;
+    final radiusX = (end.dx - start.dx).abs() / 2;
+    final radiusY = (end.dy - start.dy).abs() / 2;
+
+    if (radiusX == 0 || radiusY == 0) return false;
+
+    final dx = (x - centerX) / radiusX;
+    final dy = (y - centerY) / radiusY;
+    return (dx * dx + dy * dy) <= 1;
+  }
+}
+
+void _applyShapeBlur(img.Image image, Offset start, Offset end, DrawMode mode, double intensity) {
+  final blurRadius = (intensity * 15).toInt().clamp(1, 20);
+  final minX = max(0, min(start.dx, end.dx).toInt());
+  final maxX = min(image.width - 1, max(start.dx, end.dx).toInt());
+  final minY = max(0, min(start.dy, end.dy).toInt());
+  final maxY = min(image.height - 1, max(start.dy, end.dy).toInt());
+
+  // 영역 복사본 만들기
+  final tempImage = img.Image.from(image);
+
+  for (int y = minY; y <= maxY; y++) {
+    for (int x = minX; x <= maxX; x++) {
+      if (!_isInShape(x, y, start, end, mode)) continue;
+
+      int r = 0, g = 0, b = 0, count = 0;
+
+      for (int ky = -blurRadius; ky <= blurRadius; ky++) {
+        for (int kx = -blurRadius; kx <= blurRadius; kx++) {
+          final nx = (x + kx).clamp(0, image.width - 1);
+          final ny = (y + ky).clamp(0, image.height - 1);
+
+          final pixel = tempImage.getPixel(nx, ny);
+          r += pixel.r.toInt();
+          g += pixel.g.toInt();
+          b += pixel.b.toInt();
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        image.setPixelRgba(x, y, r ~/ count, g ~/ count, b ~/ count, 255);
+      }
+    }
+  }
+}
+
+void _applyShapeMosaic(img.Image image, Offset start, Offset end, DrawMode mode, double intensity) {
+  final blockSize = (intensity * 20).toInt().clamp(4, 30);
+  final minX = max(0, min(start.dx, end.dx).toInt());
+  final maxX = min(image.width - 1, max(start.dx, end.dx).toInt());
+  final minY = max(0, min(start.dy, end.dy).toInt());
+  final maxY = min(image.height - 1, max(start.dy, end.dy).toInt());
+
+  for (int by = minY; by <= maxY; by += blockSize) {
+    for (int bx = minX; bx <= maxX; bx += blockSize) {
+      int r = 0, g = 0, b = 0, count = 0;
+
+      // 블록 평균 색상 계산
+      for (int y = by; y < by + blockSize && y <= maxY; y++) {
+        for (int x = bx; x < bx + blockSize && x <= maxX; x++) {
+          if (!_isInShape(x, y, start, end, mode)) continue;
+          final pixel = image.getPixel(x, y);
+          r += pixel.r.toInt();
+          g += pixel.g.toInt();
+          b += pixel.b.toInt();
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        final avgR = r ~/ count;
+        final avgG = g ~/ count;
+        final avgB = b ~/ count;
+
+        for (int y = by; y < by + blockSize && y <= maxY; y++) {
+          for (int x = bx; x < bx + blockSize && x <= maxX; x++) {
+            if (!_isInShape(x, y, start, end, mode)) continue;
+            image.setPixelRgba(x, y, avgR, avgG, avgB, 255);
+          }
+        }
+      }
+    }
+  }
+}
+
+void _applyShapeBlackBar(img.Image image, Offset start, Offset end, DrawMode mode) {
+  final minX = max(0, min(start.dx, end.dx).toInt());
+  final maxX = min(image.width - 1, max(start.dx, end.dx).toInt());
+  final minY = max(0, min(start.dy, end.dy).toInt());
+  final maxY = min(image.height - 1, max(start.dy, end.dy).toInt());
+
+  for (int y = minY; y <= maxY; y++) {
+    for (int x = minX; x <= maxX; x++) {
+      if (_isInShape(x, y, start, end, mode)) {
+        image.setPixelRgba(x, y, 0, 0, 0, 255);
+      }
+    }
+  }
+}
+
+void _applyShapeHighlighter(img.Image image, Offset start, Offset end, DrawMode mode, int colorValue, double intensity) {
+  final color = Color(colorValue);
+  final alpha = (intensity * 0.5).clamp(0.2, 0.6);
+  final colorR = (color.r * 255).round().clamp(0, 255);
+  final colorG = (color.g * 255).round().clamp(0, 255);
+  final colorB = (color.b * 255).round().clamp(0, 255);
+  final minX = max(0, min(start.dx, end.dx).toInt());
+  final maxX = min(image.width - 1, max(start.dx, end.dx).toInt());
+  final minY = max(0, min(start.dy, end.dy).toInt());
+  final maxY = min(image.height - 1, max(start.dy, end.dy).toInt());
+
+  for (int y = minY; y <= maxY; y++) {
+    for (int x = minX; x <= maxX; x++) {
+      if (!_isInShape(x, y, start, end, mode)) continue;
+
+      final pixel = image.getPixel(x, y);
+      final newR = ((pixel.r * (1 - alpha)) + (colorR * alpha)).toInt().clamp(0, 255);
+      final newG = ((pixel.g * (1 - alpha)) + (colorG * alpha)).toInt().clamp(0, 255);
+      final newB = ((pixel.b * (1 - alpha)) + (colorB * alpha)).toInt().clamp(0, 255);
+      image.setPixelRgba(x, y, newR, newG, newB, 255);
+    }
+  }
+}
+
+void _applyShapeEraser(img.Image image, img.Image original, Offset start, Offset end, DrawMode mode) {
+  final minX = max(0, min(start.dx, end.dx).toInt());
+  final maxX = min(image.width - 1, max(start.dx, end.dx).toInt());
+  final minY = max(0, min(start.dy, end.dy).toInt());
+  final maxY = min(image.height - 1, max(start.dy, end.dy).toInt());
+
+  for (int y = minY; y <= maxY; y++) {
+    for (int x = minX; x <= maxX; x++) {
+      if (_isInShape(x, y, start, end, mode)) {
+        final originalPixel = original.getPixel(x, y);
+        image.setPixel(x, y, originalPixel);
+      }
+    }
+  }
+}
+
 // ==================== Canvas Painter ====================
 
 class ImageCanvasPainter extends CustomPainter {
@@ -865,12 +1575,20 @@ class ImageCanvasPainter extends CustomPainter {
   final List<Offset> currentStroke;
   final double brushSize;
   final EditTool tool;
+  final DrawMode drawMode;
+  final Offset? shapeStart;
+  final Offset? shapeEnd;
+  final Color highlighterColor;
 
   ImageCanvasPainter({
     required this.image,
     required this.currentStroke,
     required this.brushSize,
     required this.tool,
+    required this.drawMode,
+    this.shapeStart,
+    this.shapeEnd,
+    this.highlighterColor = Colors.yellow,
   });
 
   @override
@@ -893,11 +1611,34 @@ class ImageCanvasPainter extends CustomPainter {
 
     canvas.drawImageRect(image, srcRect, destRect, Paint());
 
-    // 현재 스트로크 미리보기
-    if (currentStroke.isNotEmpty) {
-      final scaleX = fittedSize.destination.width / imageSize.width;
-      final scaleY = fittedSize.destination.height / imageSize.height;
+    final scaleX = fittedSize.destination.width / imageSize.width;
+    final scaleY = fittedSize.destination.height / imageSize.height;
 
+    // 도형 미리보기
+    if (drawMode != DrawMode.brush && shapeStart != null && shapeEnd != null) {
+      final startX = offsetX + shapeStart!.dx * scaleX;
+      final startY = offsetY + shapeStart!.dy * scaleY;
+      final endX = offsetX + shapeEnd!.dx * scaleX;
+      final endY = offsetY + shapeEnd!.dy * scaleY;
+
+      final shapePaint = Paint()
+        ..color = _getStrokeColor()
+        ..style = PaintingStyle.fill;
+
+      if (drawMode == DrawMode.rectangle) {
+        canvas.drawRect(
+          Rect.fromPoints(Offset(startX, startY), Offset(endX, endY)),
+          shapePaint,
+        );
+      } else {
+        // 원형 (타원)
+        final rect = Rect.fromPoints(Offset(startX, startY), Offset(endX, endY));
+        canvas.drawOval(rect, shapePaint);
+      }
+    }
+
+    // 브러시 스트로크 미리보기
+    if (drawMode == DrawMode.brush && currentStroke.isNotEmpty) {
       final strokePaint = Paint()
         ..color = _getStrokeColor()
         ..strokeCap = StrokeCap.round
@@ -930,6 +1671,10 @@ class ImageCanvasPainter extends CustomPainter {
         return Colors.purple.withValues(alpha: 0.4);
       case EditTool.eraser:
         return Colors.white.withValues(alpha: 0.4);
+      case EditTool.blackBar:
+        return Colors.black.withValues(alpha: 0.7);
+      case EditTool.highlighter:
+        return highlighterColor.withValues(alpha: 0.5);
     }
   }
 
@@ -938,6 +1683,165 @@ class ImageCanvasPainter extends CustomPainter {
     return oldDelegate.image != image ||
         oldDelegate.currentStroke != currentStroke ||
         oldDelegate.brushSize != brushSize ||
-        oldDelegate.tool != tool;
+        oldDelegate.tool != tool ||
+        oldDelegate.drawMode != drawMode ||
+        oldDelegate.shapeStart != shapeStart ||
+        oldDelegate.shapeEnd != shapeEnd ||
+        oldDelegate.highlighterColor != highlighterColor;
+  }
+}
+
+// ==================== Settings Screen ====================
+
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('설정'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: ListView(
+        children: [
+          // 테마 설정
+          const _SectionHeader(title: '화면'),
+          ValueListenableBuilder<ThemeMode>(
+            valueListenable: themeNotifier,
+            builder: (context, currentMode, child) {
+              return Column(
+                children: [
+                  RadioListTile<ThemeMode>(
+                    value: ThemeMode.system,
+                    groupValue: currentMode,
+                    onChanged: (value) => themeNotifier.value = value!,
+                    title: const Text('시스템 설정'),
+                    subtitle: const Text('기기 설정에 따라 자동 전환'),
+                    secondary: const Icon(Icons.brightness_auto),
+                  ),
+                  RadioListTile<ThemeMode>(
+                    value: ThemeMode.light,
+                    groupValue: currentMode,
+                    onChanged: (value) => themeNotifier.value = value!,
+                    title: const Text('라이트 모드'),
+                    subtitle: const Text('밝은 테마 사용'),
+                    secondary: const Icon(Icons.light_mode),
+                  ),
+                  RadioListTile<ThemeMode>(
+                    value: ThemeMode.dark,
+                    groupValue: currentMode,
+                    onChanged: (value) => themeNotifier.value = value!,
+                    title: const Text('다크 모드'),
+                    subtitle: const Text('어두운 테마 사용'),
+                    secondary: const Icon(Icons.dark_mode),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          const SizedBox(height: 16),
+
+          // 앱 정보
+          const _SectionHeader(title: '정보'),
+          _SettingsTile(
+            icon: Icons.info_outline,
+            title: '버전',
+            subtitle: '1.0.0',
+            onTap: null,
+          ),
+          _SettingsTile(
+            icon: Icons.description_outlined,
+            title: '오픈소스 라이선스',
+            onTap: () {
+              showLicensePage(
+                context: context,
+                applicationName: 'Cover',
+                applicationVersion: '1.0.0',
+              );
+            },
+          ),
+
+          const SizedBox(height: 32),
+
+          // 앱 정보 푸터
+          Center(
+            child: Column(
+              children: [
+                Text(
+                  'Cover',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white54 : Colors.black38,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '개인정보를 안전하게',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white38 : Colors.black26,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+
+  const _SectionHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+
+  const _SettingsTile({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, size: 24),
+      title: Text(title),
+      subtitle: subtitle != null ? Text(subtitle!) : null,
+      onTap: onTap,
+    );
   }
 }
