@@ -379,9 +379,32 @@ class _HomeScreenState extends State<HomeScreen> {
 
 // ==================== Editor Screen ====================
 
-enum EditTool { blur, mosaic, eraser, blackBar, highlighter, sticker }
+enum EditTool { blur, mosaic, eraser, blackBar, highlighter, sticker, text }
 
 enum DrawMode { brush, rectangle, circle }
+
+// 텍스트 오버레이 데이터 모델
+class TextOverlayData {
+  String text;
+  Offset position; // 정규화된 좌표 (0.0 ~ 1.0)
+  double scale;
+  double rotation;
+  Color color;
+  Color backgroundColor;
+  bool hasBackground;
+  String fontStyle; // 'normal', 'bold', 'italic'
+
+  TextOverlayData({
+    required this.text,
+    required this.position,
+    this.scale = 1.0,
+    this.rotation = 0.0,
+    this.color = Colors.white,
+    this.backgroundColor = Colors.black,
+    this.hasBackground = true,
+    this.fontStyle = 'bold',
+  });
+}
 
 // 스티커 데이터 모델
 class StickerData {
@@ -561,6 +584,14 @@ class _EditorScreenState extends State<EditorScreen> {
   int? _selectedStickerIndex;
   Offset? _stickerDragStart;
   double _initialStickerScale = 1.0;
+
+  // 텍스트 오버레이 관련
+  final List<TextOverlayData> _textOverlays = [];
+  int? _selectedTextIndex;
+  double _initialTextScale = 1.0;
+  Color _currentTextColor = Colors.white;
+  Color _currentTextBgColor = Colors.black;
+  bool _textHasBackground = true;
 
   @override
   void initState() {
@@ -1027,6 +1058,9 @@ class _EditorScreenState extends State<EditorScreen> {
                           // 스티커 렌더링
                           if (!_showingOriginal)
                             ..._buildStickerWidgets(canvasSize),
+                          // 텍스트 렌더링
+                          if (!_showingOriginal)
+                            ..._buildTextWidgets(canvasSize),
                         ],
                       );
                     },
@@ -1047,28 +1081,33 @@ class _EditorScreenState extends State<EditorScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 1. 도구 선택 - 2줄 그리드
+                    // 1. 도구 선택 - 그리드
                     Column(
                       children: [
-                        // 1행: 블러, 모자이크, 검은바
+                        // 1행: 블러, 모자이크, 검은바, 형광펜
                         Row(
                           children: [
                             Expanded(child: _buildGridToolChip(EditTool.blur, Icons.blur_on, '블러')),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Expanded(child: _buildGridToolChip(EditTool.mosaic, Icons.grid_view, '모자이크')),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Expanded(child: _buildGridToolChip(EditTool.blackBar, Icons.rectangle, '검은바')),
+                            const SizedBox(width: 6),
+                            Expanded(child: _buildGridToolChip(EditTool.highlighter, Icons.highlight, '형광펜')),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        // 2행: 형광펜, 지우개, 스티커
+                        // 2행: 지우개, 스티커, 텍스트
                         Row(
                           children: [
-                            Expanded(child: _buildGridToolChip(EditTool.highlighter, Icons.highlight, '형광펜')),
-                            const SizedBox(width: 8),
                             Expanded(child: _buildGridToolChip(EditTool.eraser, Icons.auto_fix_high, '지우개')),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Expanded(child: _buildGridToolChip(EditTool.sticker, Icons.emoji_emotions, '스티커')),
+                            const SizedBox(width: 6),
+                            Expanded(child: _buildGridToolChip(EditTool.text, Icons.text_fields, '텍스트')),
+                            const SizedBox(width: 6),
+                            // 빈 공간
+                            const Expanded(child: SizedBox()),
                           ],
                         ),
                       ],
@@ -1081,7 +1120,9 @@ class _EditorScreenState extends State<EditorScreen> {
                       height: 130,
                       child: _currentTool == EditTool.sticker
                           ? _buildStickerControls()
-                          : Column(
+                          : _currentTool == EditTool.text
+                              ? _buildTextControls()
+                              : Column(
                               children: [
                                 // 모드 선택
                                 Row(
@@ -1187,6 +1228,8 @@ class _EditorScreenState extends State<EditorScreen> {
         setState(() => _currentTool = tool);
         if (tool == EditTool.sticker) {
           _showStickerPicker();
+        } else if (tool == EditTool.text) {
+          _showTextInputDialog();
         }
       },
       child: Container(
@@ -1465,6 +1508,293 @@ class _EditorScreenState extends State<EditorScreen> {
       _stickers.clear();
       _selectedStickerIndex = null;
     });
+  }
+
+  // ========== 텍스트 오버레이 관련 ==========
+
+  Widget _buildTextControls() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              // 텍스트 추가 버튼
+              Expanded(
+                child: GestureDetector(
+                  onTap: _showTextInputDialog,
+                  child: Container(
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2196F3),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add, color: Colors.white, size: 20),
+                        SizedBox(width: 6),
+                        Text('텍스트 추가', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (_textOverlays.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                // 선택된 텍스트 삭제 버튼
+                GestureDetector(
+                  onTap: _selectedTextIndex != null ? _deleteSelectedText : null,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: _selectedTextIndex != null
+                          ? Colors.red.withValues(alpha: 0.8)
+                          : Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Icon(
+                      Icons.delete_outline,
+                      color: _selectedTextIndex != null ? Colors.white : Colors.white38,
+                      size: 20,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // 모든 텍스트 삭제 버튼
+                GestureDetector(
+                  onTap: _clearAllTexts,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: const Icon(Icons.clear_all, color: Colors.white70, size: 20),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          // 색상 선택
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('글자 ', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              _buildTextColorChip(Colors.white, true),
+              _buildTextColorChip(Colors.black, true),
+              _buildTextColorChip(Colors.red, true),
+              _buildTextColorChip(Colors.yellow, true),
+              const SizedBox(width: 12),
+              const Text('배경 ', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              _buildTextColorChip(Colors.black, false),
+              _buildTextColorChip(Colors.white, false),
+              _buildTextColorChip(Colors.transparent, false),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextColorChip(Color color, bool isTextColor) {
+    final isSelected = isTextColor
+        ? _currentTextColor == color
+        : (color == Colors.transparent ? !_textHasBackground : _currentTextBgColor == color && _textHasBackground);
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (isTextColor) {
+            _currentTextColor = color;
+          } else {
+            if (color == Colors.transparent) {
+              _textHasBackground = false;
+            } else {
+              _textHasBackground = true;
+              _currentTextBgColor = color;
+            }
+          }
+          // 선택된 텍스트가 있으면 바로 적용
+          if (_selectedTextIndex != null && _selectedTextIndex! < _textOverlays.length) {
+            if (isTextColor) {
+              _textOverlays[_selectedTextIndex!].color = color;
+            } else {
+              _textOverlays[_selectedTextIndex!].hasBackground = color != Colors.transparent;
+              if (color != Colors.transparent) {
+                _textOverlays[_selectedTextIndex!].backgroundColor = color;
+              }
+            }
+          }
+        });
+      },
+      child: Container(
+        width: 24,
+        height: 24,
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        decoration: BoxDecoration(
+          color: color == Colors.transparent ? null : color,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isSelected ? const Color(0xFF2196F3) : Colors.white38,
+            width: isSelected ? 3 : 1,
+          ),
+        ),
+        child: color == Colors.transparent
+            ? const Icon(Icons.not_interested, size: 16, color: Colors.white54)
+            : null,
+      ),
+    );
+  }
+
+  void _showTextInputDialog() {
+    final controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('텍스트 입력'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '텍스트를 입력하세요',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 2,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                _addTextOverlay(controller.text);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('추가'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addTextOverlay(String text) {
+    setState(() {
+      _textOverlays.add(TextOverlayData(
+        text: text,
+        position: const Offset(0.5, 0.5),
+        color: _currentTextColor,
+        backgroundColor: _currentTextBgColor,
+        hasBackground: _textHasBackground,
+      ));
+      _selectedTextIndex = _textOverlays.length - 1;
+    });
+  }
+
+  void _deleteSelectedText() {
+    if (_selectedTextIndex != null && _selectedTextIndex! < _textOverlays.length) {
+      setState(() {
+        _textOverlays.removeAt(_selectedTextIndex!);
+        _selectedTextIndex = _textOverlays.isEmpty ? null : (_textOverlays.length - 1);
+      });
+    }
+  }
+
+  void _clearAllTexts() {
+    setState(() {
+      _textOverlays.clear();
+      _selectedTextIndex = null;
+    });
+  }
+
+  List<Widget> _buildTextWidgets(Size canvasSize) {
+    if (_displayImage == null) return [];
+
+    final imageAspect = _displayImage!.width / _displayImage!.height;
+    final canvasAspect = canvasSize.width / canvasSize.height;
+
+    double imageWidth, imageHeight;
+    double offsetX = 0, offsetY = 0;
+
+    if (imageAspect > canvasAspect) {
+      imageWidth = canvasSize.width;
+      imageHeight = canvasSize.width / imageAspect;
+      offsetY = (canvasSize.height - imageHeight) / 2;
+    } else {
+      imageHeight = canvasSize.height;
+      imageWidth = canvasSize.height * imageAspect;
+      offsetX = (canvasSize.width - imageWidth) / 2;
+    }
+
+    return _textOverlays.asMap().entries.map((entry) {
+      final index = entry.key;
+      final textData = entry.value;
+      final isSelected = _selectedTextIndex == index;
+
+      final baseSize = 16.0 * textData.scale;
+      final x = offsetX + textData.position.dx * imageWidth;
+      final y = offsetY + textData.position.dy * imageHeight;
+
+      return Positioned(
+        left: x * _scale + _offset.dx,
+        top: y * _scale + _offset.dy,
+        child: GestureDetector(
+          onTap: () {
+            setState(() => _selectedTextIndex = index);
+          },
+          onScaleStart: (details) {
+            setState(() => _selectedTextIndex = index);
+            _initialTextScale = textData.scale;
+          },
+          onScaleUpdate: (details) {
+            if (_selectedTextIndex == index) {
+              setState(() {
+                final dx = details.focalPointDelta.dx / (imageWidth * _scale);
+                final dy = details.focalPointDelta.dy / (imageHeight * _scale);
+                textData.position = Offset(
+                  (textData.position.dx + dx).clamp(0.0, 1.0),
+                  (textData.position.dy + dy).clamp(0.0, 1.0),
+                );
+                if (details.scale != 1.0) {
+                  textData.scale = (_initialTextScale * details.scale).clamp(0.5, 4.0);
+                }
+              });
+            }
+          },
+          child: Transform.scale(
+            scale: _scale,
+            child: Container(
+              padding: textData.hasBackground
+                  ? const EdgeInsets.symmetric(horizontal: 12, vertical: 6)
+                  : EdgeInsets.zero,
+              decoration: BoxDecoration(
+                color: textData.hasBackground ? textData.backgroundColor : null,
+                borderRadius: BorderRadius.circular(4),
+                border: isSelected
+                    ? Border.all(color: const Color(0xFF2196F3), width: 2)
+                    : null,
+              ),
+              child: Text(
+                textData.text,
+                style: TextStyle(
+                  color: textData.color,
+                  fontSize: baseSize,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
   }
 
   List<Widget> _buildStickerWidgets(Size canvasSize) {
@@ -1842,13 +2172,33 @@ class _EditorScreenState extends State<EditorScreen> {
       Uint8List finalBytes = _currentBytes!;
       if (_stickers.isNotEmpty) {
         finalBytes = await compute(compositeStickers, CompositeRequest(
-          imageBytes: _currentBytes!,
+          imageBytes: finalBytes,
           stickers: _stickers.map((s) => StickerInfo(
             content: s.content,
             positionX: s.position.dx,
             positionY: s.position.dy,
             scale: s.scale,
             isEmoji: s.isEmoji,
+          )).toList(),
+        ));
+      }
+
+      // 텍스트 오버레이가 있으면 합성
+      if (_textOverlays.isNotEmpty) {
+        finalBytes = await compute(compositeTexts, TextCompositeRequest(
+          imageBytes: finalBytes,
+          texts: _textOverlays.map((t) => TextOverlayInfo(
+            text: t.text,
+            positionX: t.position.dx,
+            positionY: t.position.dy,
+            scale: t.scale,
+            colorR: (t.color.r * 255.0).round().clamp(0, 255),
+            colorG: (t.color.g * 255.0).round().clamp(0, 255),
+            colorB: (t.color.b * 255.0).round().clamp(0, 255),
+            bgColorR: (t.backgroundColor.r * 255.0).round().clamp(0, 255),
+            bgColorG: (t.backgroundColor.g * 255.0).round().clamp(0, 255),
+            bgColorB: (t.backgroundColor.b * 255.0).round().clamp(0, 255),
+            hasBackground: t.hasBackground,
           )).toList(),
         ));
       }
@@ -2011,6 +2361,126 @@ Uint8List compositeStickers(CompositeRequest request) {
   return Uint8List.fromList(img.encodeJpg(image, quality: 95));
 }
 
+// 텍스트 오버레이 정보 클래스
+class TextOverlayInfo {
+  final String text;
+  final double positionX;
+  final double positionY;
+  final double scale;
+  final int colorR;
+  final int colorG;
+  final int colorB;
+  final int bgColorR;
+  final int bgColorG;
+  final int bgColorB;
+  final bool hasBackground;
+
+  TextOverlayInfo({
+    required this.text,
+    required this.positionX,
+    required this.positionY,
+    required this.scale,
+    required this.colorR,
+    required this.colorG,
+    required this.colorB,
+    required this.bgColorR,
+    required this.bgColorG,
+    required this.bgColorB,
+    required this.hasBackground,
+  });
+}
+
+class TextCompositeRequest {
+  final Uint8List imageBytes;
+  final List<TextOverlayInfo> texts;
+
+  TextCompositeRequest({
+    required this.imageBytes,
+    required this.texts,
+  });
+}
+
+// 텍스트 합성 함수 (Isolate에서 실행)
+Uint8List compositeTexts(TextCompositeRequest request) {
+  final image = img.decodeImage(request.imageBytes);
+  if (image == null) return request.imageBytes;
+
+  for (final textInfo in request.texts) {
+    // 텍스트 위치 계산 (정규화된 좌표 -> 실제 좌표)
+    final x = (textInfo.positionX * image.width).toInt();
+    final y = (textInfo.positionY * image.height).toInt();
+
+    // 텍스트 크기 계산 (scale 기반)
+    final baseWidth = (textInfo.text.length * 12 * textInfo.scale).toInt();
+    final baseHeight = (24 * textInfo.scale).toInt();
+    final padding = (4 * textInfo.scale).toInt();
+
+    final halfWidth = baseWidth ~/ 2 + padding;
+    final halfHeight = baseHeight ~/ 2 + padding;
+
+    // 배경이 있으면 배경 사각형 그리기
+    if (textInfo.hasBackground) {
+      final bgColor = img.ColorRgba8(textInfo.bgColorR, textInfo.bgColorG, textInfo.bgColorB, 255);
+      for (int dy = -halfHeight; dy < halfHeight; dy++) {
+        for (int dx = -halfWidth; dx < halfWidth; dx++) {
+          final px = x + dx;
+          final py = y + dy;
+          if (px >= 0 && px < image.width && py >= 0 && py < image.height) {
+            image.setPixel(px, py, bgColor);
+          }
+        }
+      }
+    }
+
+    // 텍스트 색상으로 테두리 표시 (텍스트 자체는 이미지로 렌더링 어려움)
+    final textColor = img.ColorRgba8(textInfo.colorR, textInfo.colorG, textInfo.colorB, 255);
+    final borderWidth = (2 * textInfo.scale).toInt().clamp(1, 4);
+
+    // 상단 테두리
+    for (int dy = -halfHeight; dy < -halfHeight + borderWidth; dy++) {
+      for (int dx = -halfWidth; dx < halfWidth; dx++) {
+        final px = x + dx;
+        final py = y + dy;
+        if (px >= 0 && px < image.width && py >= 0 && py < image.height) {
+          image.setPixel(px, py, textColor);
+        }
+      }
+    }
+    // 하단 테두리
+    for (int dy = halfHeight - borderWidth; dy < halfHeight; dy++) {
+      for (int dx = -halfWidth; dx < halfWidth; dx++) {
+        final px = x + dx;
+        final py = y + dy;
+        if (px >= 0 && px < image.width && py >= 0 && py < image.height) {
+          image.setPixel(px, py, textColor);
+        }
+      }
+    }
+    // 좌측 테두리
+    for (int dy = -halfHeight; dy < halfHeight; dy++) {
+      for (int dx = -halfWidth; dx < -halfWidth + borderWidth; dx++) {
+        final px = x + dx;
+        final py = y + dy;
+        if (px >= 0 && px < image.width && py >= 0 && py < image.height) {
+          image.setPixel(px, py, textColor);
+        }
+      }
+    }
+    // 우측 테두리
+    for (int dy = -halfHeight; dy < halfHeight; dy++) {
+      for (int dx = halfWidth - borderWidth; dx < halfWidth; dx++) {
+        final px = x + dx;
+        final py = y + dy;
+        if (px >= 0 && px < image.width && py >= 0 && py < image.height) {
+          image.setPixel(px, py, textColor);
+        }
+      }
+    }
+  }
+
+  return Uint8List.fromList(img.encodeJpg(image, quality: 95));
+}
+
 class ProcessRequest {
   final Uint8List imageBytes;
   final List<List<double>> points;
@@ -2078,7 +2548,8 @@ Uint8List _processImage(ProcessRequest request) {
         _applyShapeHighlighter(image, start, end, request.drawMode, request.highlighterColor, request.intensity);
         break;
       case EditTool.sticker:
-        break; // 스티커는 별도 레이어에서 처리
+      case EditTool.text:
+        break; // 스티커/텍스트는 별도 레이어에서 처리
     }
   } else {
     // 브러시 모드
@@ -2102,7 +2573,8 @@ Uint8List _processImage(ProcessRequest request) {
         }
         break;
       case EditTool.sticker:
-        break; // 스티커는 별도 레이어에서 처리
+      case EditTool.text:
+        break; // 스티커/텍스트는 별도 레이어에서 처리
     }
   }
 
@@ -2582,6 +3054,7 @@ class ImageCanvasPainter extends CustomPainter {
       case EditTool.highlighter:
         return highlighterColor.withValues(alpha: 0.5);
       case EditTool.sticker:
+      case EditTool.text:
         return Colors.transparent;
     }
   }
