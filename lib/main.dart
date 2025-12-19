@@ -15,9 +15,110 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 // 테마 모드 관리
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
+
+// ==================== Analytics 서비스 ====================
+
+class AnalyticsService {
+  static final AnalyticsService _instance = AnalyticsService._internal();
+  factory AnalyticsService() => _instance;
+  AnalyticsService._internal();
+
+  FirebaseAnalytics? _analytics;
+  bool _isInitialized = false;
+
+  // 초기화
+  Future<void> initialize() async {
+    try {
+      await Firebase.initializeApp();
+      _analytics = FirebaseAnalytics.instance;
+      _isInitialized = true;
+      debugPrint('Firebase Analytics 초기화 완료');
+    } catch (e) {
+      debugPrint('Firebase Analytics 초기화 실패: $e');
+      _isInitialized = false;
+    }
+  }
+
+  // 이벤트 로깅
+  Future<void> logEvent(String name, [Map<String, Object>? parameters]) async {
+    if (!_isInitialized || _analytics == null) return;
+    try {
+      await _analytics!.logEvent(name: name, parameters: parameters);
+    } catch (e) {
+      debugPrint('Analytics 이벤트 로깅 실패: $e');
+    }
+  }
+
+  // 화면 조회 로깅
+  Future<void> logScreenView(String screenName) async {
+    if (!_isInitialized || _analytics == null) return;
+    try {
+      await _analytics!.logScreenView(screenName: screenName);
+    } catch (e) {
+      debugPrint('Analytics 화면 로깅 실패: $e');
+    }
+  }
+
+  // 사용자 속성 설정
+  Future<void> setUserProperty(String name, String value) async {
+    if (!_isInitialized || _analytics == null) return;
+    try {
+      await _analytics!.setUserProperty(name: name, value: value);
+    } catch (e) {
+      debugPrint('Analytics 사용자 속성 설정 실패: $e');
+    }
+  }
+
+  // ==================== 앱 이벤트 ====================
+
+  // 이미지 가져오기
+  void logImageImported(String source) {
+    logEvent('image_imported', {'source': source});
+  }
+
+  // 도구 사용
+  void logToolUsed(String tool, {String? mode, String? shape}) {
+    final params = <String, Object>{'tool': tool};
+    if (mode != null) params['mode'] = mode;
+    if (shape != null) params['shape'] = shape;
+    logEvent('tool_used', params);
+  }
+
+  // 이미지 저장
+  void logImageSaved({String? quality}) {
+    logEvent('image_saved', quality != null ? {'quality': quality} : null);
+  }
+
+  // 이미지 공유
+  void logImageShared() {
+    logEvent('image_shared');
+  }
+
+  // 배치 처리
+  void logBatchProcessed(int imageCount) {
+    logEvent('batch_processed', {'image_count': imageCount});
+  }
+
+  // 구독 시작
+  void logSubscriptionStarted(String plan) {
+    logEvent('subscription_started', {'plan': plan});
+  }
+
+  // 구독 화면 조회
+  void logSubscriptionViewed() {
+    logEvent('subscription_viewed');
+  }
+
+  // 설정 변경
+  void logSettingsChanged(String setting, String value) {
+    logEvent('settings_changed', {'setting': setting, 'value': value});
+  }
+}
 
 // ==================== 구독 관리 서비스 ====================
 
@@ -349,6 +450,9 @@ class RecentImages {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase Analytics 초기화
+  await AnalyticsService().initialize();
 
   // RevenueCat 초기화
   await SubscriptionService().initialize();
@@ -725,6 +829,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       if (image != null && mounted) {
+        AnalyticsService().logImageImported('gallery');
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -754,6 +859,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       if (image != null && mounted) {
+        AnalyticsService().logImageImported('camera');
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -1149,6 +1255,8 @@ class _EditorScreenState extends State<EditorScreen> {
 
   // 비교 모드
   bool _showingOriginal = false;
+  bool _compareMode = false;
+  double _compareSliderValue = 0.5;
 
   // 편집 상태
   EditTool _currentTool = EditTool.blur;
@@ -1543,6 +1651,17 @@ class _EditorScreenState extends State<EditorScreen> {
             onPressed: _rotateImage,
             tooltip: '회전',
           ),
+          // 비교 모드 버튼
+          IconButton(
+            icon: Icon(
+              Icons.compare,
+              color: _compareMode ? const Color(0xFF2196F3) : Colors.white,
+            ),
+            onPressed: () {
+              setState(() => _compareMode = !_compareMode);
+            },
+            tooltip: '원본 비교',
+          ),
           // 줌 리셋
           if (_scale != 1.0)
             IconButton(
@@ -1653,6 +1772,11 @@ class _EditorScreenState extends State<EditorScreen> {
                                   ),
                                 ),
                               ),
+                            ),
+                          // 비교 모드 슬라이더 오버레이
+                          if (_compareMode && _originalDisplayImage != null)
+                            Positioned.fill(
+                              child: _buildCompareOverlay(canvasSize),
                             ),
                           // 스티커 렌더링
                           if (!_showingOriginal)
@@ -1820,11 +1944,97 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  // 비교 모드 오버레이
+  Widget _buildCompareOverlay(Size canvasSize) {
+    return GestureDetector(
+      onHorizontalDragUpdate: (details) {
+        setState(() {
+          _compareSliderValue = (details.localPosition.dx / canvasSize.width).clamp(0.0, 1.0);
+        });
+      },
+      onTapDown: (details) {
+        setState(() {
+          _compareSliderValue = (details.localPosition.dx / canvasSize.width).clamp(0.0, 1.0);
+        });
+      },
+      child: Stack(
+        children: [
+          // 원본 이미지 (왼쪽)
+          ClipRect(
+            clipper: _CompareClipper(_compareSliderValue, isLeft: true),
+            child: CustomPaint(
+              size: canvasSize,
+              painter: _CompareImagePainter(
+                image: _originalDisplayImage!,
+                scale: _scale,
+                offset: _offset,
+                rotation: _rotation,
+              ),
+            ),
+          ),
+          // 슬라이더 라인
+          Positioned(
+            left: canvasSize.width * _compareSliderValue - 2,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 4,
+              color: Colors.white,
+              child: Center(
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.compare_arrows, size: 20, color: Colors.black87),
+                ),
+              ),
+            ),
+          ),
+          // 라벨
+          Positioned(
+            top: 16,
+            left: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text('원본', style: TextStyle(color: Colors.white, fontSize: 12)),
+            ),
+          ),
+          Positioned(
+            top: 16,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text('편집', style: TextStyle(color: Colors.white, fontSize: 12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGridToolChip(EditTool tool, IconData icon, String label) {
     final isSelected = _currentTool == tool;
     return GestureDetector(
       onTap: () {
         setState(() => _currentTool = tool);
+        AnalyticsService().logToolUsed(tool.name);
         if (tool == EditTool.sticker) {
           _showStickerPicker();
         } else if (tool == EditTool.text) {
@@ -2818,6 +3028,9 @@ class _EditorScreenState extends State<EditorScreen> {
           // 최근 이미지에 원본 경로 추가
           await RecentImages.addImage(widget.imageFile.path);
 
+          // Analytics 이벤트
+          AnalyticsService().logImageSaved(quality: quality.label);
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
@@ -2870,6 +3083,9 @@ class _EditorScreenState extends State<EditorScreen> {
         [XFile(tempFile.path)],
         text: 'Cover로 편집한 이미지',
       );
+
+      // Analytics 이벤트
+      AnalyticsService().logImageShared();
 
       // 임시 파일 삭제
       if (await tempFile.exists()) {
@@ -3579,6 +3795,79 @@ void _applyShapeEraser(img.Image image, img.Image original, Offset start, Offset
         image.setPixel(x, y, originalPixel);
       }
     }
+  }
+}
+
+// ==================== Compare Mode Classes ====================
+
+class _CompareClipper extends CustomClipper<Rect> {
+  final double sliderValue;
+  final bool isLeft;
+
+  _CompareClipper(this.sliderValue, {this.isLeft = true});
+
+  @override
+  Rect getClip(Size size) {
+    if (isLeft) {
+      return Rect.fromLTWH(0, 0, size.width * sliderValue, size.height);
+    } else {
+      return Rect.fromLTWH(size.width * sliderValue, 0, size.width * (1 - sliderValue), size.height);
+    }
+  }
+
+  @override
+  bool shouldReclip(_CompareClipper oldClipper) {
+    return sliderValue != oldClipper.sliderValue;
+  }
+}
+
+class _CompareImagePainter extends CustomPainter {
+  final ui.Image image;
+  final double scale;
+  final Offset offset;
+  final int rotation;
+
+  _CompareImagePainter({
+    required this.image,
+    required this.scale,
+    required this.offset,
+    required this.rotation,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final imageSize = Size(image.width.toDouble(), image.height.toDouble());
+    final fittedSize = applyBoxFit(BoxFit.contain, imageSize, size);
+
+    final offsetX = (size.width - fittedSize.destination.width) / 2;
+    final offsetY = (size.height - fittedSize.destination.height) / 2;
+
+    final destRect = Rect.fromLTWH(
+      offsetX + offset.dx,
+      offsetY + offset.dy,
+      fittedSize.destination.width * scale,
+      fittedSize.destination.height * scale,
+    );
+
+    final srcRect = Rect.fromLTWH(0, 0, imageSize.width, imageSize.height);
+
+    canvas.save();
+    if (rotation != 0) {
+      final center = Offset(size.width / 2, size.height / 2);
+      canvas.translate(center.dx, center.dy);
+      canvas.rotate(rotation * 3.14159 / 180);
+      canvas.translate(-center.dx, -center.dy);
+    }
+    canvas.drawImageRect(image, srcRect, destRect, Paint());
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_CompareImagePainter oldDelegate) {
+    return image != oldDelegate.image ||
+        scale != oldDelegate.scale ||
+        offset != oldDelegate.offset ||
+        rotation != oldDelegate.rotation;
   }
 }
 
@@ -4403,6 +4692,7 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
   void initState() {
     super.initState();
     _loadOfferings();
+    AnalyticsService().logSubscriptionViewed();
   }
 
   Future<void> _loadOfferings() async {
@@ -4422,6 +4712,11 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
       if (_packages != null && _packages!.isNotEmpty) {
         final package = _packages![_selectedPlanIndex];
         final success = await _subscriptionService.purchasePackage(package);
+
+        if (success) {
+          final plan = _selectedPlanIndex == 0 ? 'yearly' : 'monthly';
+          AnalyticsService().logSubscriptionStarted(plan);
+        }
 
         if (mounted) {
           Navigator.pop(context);
