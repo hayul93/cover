@@ -78,11 +78,298 @@ class CoverApp extends StatelessWidget {
             useMaterial3: true,
             scaffoldBackgroundColor: Colors.black,
           ),
-          home: const HomeScreen(),
+          home: const SplashScreen(),
         );
       },
     );
   }
+}
+
+// ==================== Splash Screen ====================
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _checkFirstLaunch();
+  }
+
+  Future<void> _checkFirstLaunch() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasSeenOnboarding = prefs.getBool('has_seen_onboarding') ?? false;
+
+    if (!mounted) return;
+
+    if (hasSeenOnboarding) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2196F3),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: const Icon(
+                Icons.shield,
+                size: 60,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Cover',
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== Onboarding Screen ====================
+
+class OnboardingScreen extends StatefulWidget {
+  const OnboardingScreen({super.key});
+
+  @override
+  State<OnboardingScreen> createState() => _OnboardingScreenState();
+}
+
+class _OnboardingScreenState extends State<OnboardingScreen> {
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+
+  final List<OnboardingPage> _pages = [
+    OnboardingPage(
+      icon: Icons.shield,
+      title: '개인정보를 안전하게',
+      description: '사진 속 민감한 정보를\n3초 만에 블러 처리하세요',
+      color: const Color(0xFF2196F3),
+    ),
+    OnboardingPage(
+      icon: Icons.blur_on,
+      title: '다양한 편집 도구',
+      description: '블러, 모자이크, 검정 바,\n하이라이터 등 다양한 도구 제공',
+      color: const Color(0xFF9C27B0),
+    ),
+    OnboardingPage(
+      icon: Icons.text_fields,
+      title: '텍스트 & 스티커',
+      description: '텍스트와 스티커로\n더 창의적인 편집이 가능해요',
+      color: const Color(0xFF4CAF50),
+    ),
+    OnboardingPage(
+      icon: Icons.share,
+      title: '저장 & 공유',
+      description: '편집한 이미지를 갤러리에 저장하고\n바로 공유하세요',
+      color: const Color(0xFFFF9800),
+    ),
+  ];
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _completeOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('has_seen_onboarding', true);
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const HomeScreen()),
+    );
+  }
+
+  void _nextPage() {
+    if (_currentPage < _pages.length - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      _completeOnboarding();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Skip button
+            Align(
+              alignment: Alignment.topRight,
+              child: TextButton(
+                onPressed: _completeOnboarding,
+                child: Text(
+                  '건너뛰기',
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+            // Page content
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: _pages.length,
+                onPageChanged: (index) {
+                  setState(() => _currentPage = index);
+                },
+                itemBuilder: (context, index) {
+                  return _buildPage(_pages[index]);
+                },
+              ),
+            ),
+            // Page indicator
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  _pages.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentPage == index ? 24 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _currentPage == index
+                          ? _pages[_currentPage].color
+                          : Colors.grey[700],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Next/Start button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+              child: SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _nextPage,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _pages[_currentPage].color,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Text(
+                    _currentPage == _pages.length - 1 ? '시작하기' : '다음',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPage(OnboardingPage page) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 160,
+            height: 160,
+            decoration: BoxDecoration(
+              color: page.color.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              page.icon,
+              size: 80,
+              color: page.color,
+            ),
+          ),
+          const SizedBox(height: 48),
+          Text(
+            page.title,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            page.description,
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.grey[400],
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class OnboardingPage {
+  final IconData icon;
+  final String title;
+  final String description;
+  final Color color;
+
+  OnboardingPage({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.color,
+  });
 }
 
 // ==================== Home Screen ====================
@@ -2516,12 +2803,46 @@ Uint8List _rotateImageBytes(Uint8List bytes) {
   return Uint8List.fromList(img.encodeJpg(rotated, quality: 90));
 }
 
+// 연속된 포인트들 사이를 보간하여 부드러운 선을 만드는 함수
+List<Offset> _interpolatePoints(List<Offset> points, double maxDistance) {
+  if (points.length < 2) return points;
+
+  final result = <Offset>[points[0]];
+
+  for (int i = 1; i < points.length; i++) {
+    final prev = points[i - 1];
+    final curr = points[i];
+    final dx = curr.dx - prev.dx;
+    final dy = curr.dy - prev.dy;
+    final distance = sqrt(dx * dx + dy * dy);
+
+    if (distance > maxDistance) {
+      // 두 점 사이에 중간 점들을 추가
+      final steps = (distance / maxDistance).ceil();
+      for (int j = 1; j < steps; j++) {
+        final t = j / steps;
+        result.add(Offset(
+          prev.dx + dx * t,
+          prev.dy + dy * t,
+        ));
+      }
+    }
+    result.add(curr);
+  }
+
+  return result;
+}
+
 Uint8List _processImage(ProcessRequest request) {
   final image = img.decodeImage(request.imageBytes);
   if (image == null) return request.imageBytes;
 
-  final points = request.points.map((p) => Offset(p[0], p[1])).toList();
+  final rawPoints = request.points.map((p) => Offset(p[0], p[1])).toList();
   final radius = (request.brushSize / 2).toInt();
+
+  // 포인트들 사이를 보간하여 끊김 없이 연결
+  final maxGap = (radius * 0.5).clamp(2.0, 10.0);
+  final points = _interpolatePoints(rawPoints, maxGap);
 
   // 도형 모드인 경우
   if (request.drawMode != DrawMode.brush && request.shapeStart != null && request.shapeEnd != null) {
