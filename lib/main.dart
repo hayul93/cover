@@ -496,20 +496,6 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // 설정 버튼
-            Positioned(
-              top: 8,
-              right: 8,
-              child: IconButton(
-                icon: Icon(Icons.settings_outlined, color: subtitleColor),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                  );
-                },
-              ),
-            ),
             SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(32.0),
@@ -657,6 +643,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: Colors.black54,
                 child: const Center(child: CircularProgressIndicator(color: Color(0xFF2196F3))),
               ),
+            // 설정 버튼 (Stack 위에 표시)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: Icon(Icons.settings_outlined, color: subtitleColor),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
