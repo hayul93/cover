@@ -10,12 +10,313 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // 테마 모드 관리
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
+
+// ==================== 구독 관리 서비스 ====================
+
+class SubscriptionService {
+  static final SubscriptionService _instance = SubscriptionService._internal();
+  factory SubscriptionService() => _instance;
+  SubscriptionService._internal();
+
+  // RevenueCat API 키 (실제 키로 교체 필요)
+  static const String _apiKeyIOS = 'appl_YOUR_IOS_API_KEY';
+  static const String _apiKeyAndroid = 'goog_YOUR_ANDROID_API_KEY';
+
+  // 상품 ID
+  static const String entitlementId = 'pro';
+  static const String monthlyProductId = 'cover_pro_monthly';
+  static const String yearlyProductId = 'cover_pro_yearly';
+
+  // 구독 상태
+  final ValueNotifier<bool> isPro = ValueNotifier(false);
+  CustomerInfo? _customerInfo;
+  bool _isConfigured = false;
+
+  // 초기화
+  Future<void> initialize() async {
+    try {
+      final apiKey = Platform.isIOS ? _apiKeyIOS : _apiKeyAndroid;
+
+      // 실제 API 키가 설정되지 않은 경우 건너뛰기
+      if (apiKey.contains('YOUR_')) {
+        debugPrint('RevenueCat: API 키가 설정되지 않음 - 테스트 모드');
+        _isConfigured = false;
+        return;
+      }
+
+      await Purchases.configure(PurchasesConfiguration(apiKey));
+      _isConfigured = true;
+
+      // 구독 상태 확인
+      await _refreshPurchaseStatus();
+
+      // 구독 상태 변경 리스너
+      Purchases.addCustomerInfoUpdateListener((info) {
+        _customerInfo = info;
+        _updateProStatus();
+      });
+    } catch (e) {
+      debugPrint('RevenueCat 초기화 오류: $e');
+      _isConfigured = false;
+    }
+  }
+
+  // 구독 상태 새로고침
+  Future<void> _refreshPurchaseStatus() async {
+    if (!_isConfigured) return;
+    try {
+      _customerInfo = await Purchases.getCustomerInfo();
+      _updateProStatus();
+    } catch (e) {
+      debugPrint('구독 상태 확인 오류: $e');
+    }
+  }
+
+  // Pro 상태 업데이트
+  void _updateProStatus() {
+    final entitlement = _customerInfo?.entitlements.active[entitlementId];
+    isPro.value = entitlement?.isActive ?? false;
+  }
+
+  // 상품 정보 가져오기
+  Future<List<Package>?> getOfferings() async {
+    if (!_isConfigured) return null;
+    try {
+      final offerings = await Purchases.getOfferings();
+      return offerings.current?.availablePackages;
+    } catch (e) {
+      debugPrint('상품 정보 가져오기 오류: $e');
+      return null;
+    }
+  }
+
+  // 구매 처리
+  Future<bool> purchasePackage(Package package) async {
+    if (!_isConfigured) return false;
+    try {
+      final result = await Purchases.purchasePackage(package);
+      _customerInfo = result;
+      _updateProStatus();
+      return isPro.value;
+    } catch (e) {
+      if (e is PurchasesErrorCode) {
+        if (e == PurchasesErrorCode.purchaseCancelledError) {
+          debugPrint('사용자가 구매를 취소함');
+        }
+      }
+      debugPrint('구매 오류: $e');
+      return false;
+    }
+  }
+
+  // 구매 복원
+  Future<bool> restorePurchases() async {
+    if (!_isConfigured) return false;
+    try {
+      _customerInfo = await Purchases.restorePurchases();
+      _updateProStatus();
+      return isPro.value;
+    } catch (e) {
+      debugPrint('구매 복원 오류: $e');
+      return false;
+    }
+  }
+
+  // Pro 상태 확인
+  bool get isProUser => isPro.value;
+}
+
+// ==================== 광고 서비스 ====================
+
+class AdService {
+  static final AdService _instance = AdService._internal();
+  factory AdService() => _instance;
+  AdService._internal();
+
+  // 테스트 광고 ID (실제 배포 시 변경 필요)
+  static String get interstitialAdUnitId {
+    if (Platform.isIOS) {
+      return 'ca-app-pub-3940256099942544/4411468910'; // iOS 테스트 전면
+    } else {
+      return 'ca-app-pub-3940256099942544/1033173712'; // Android 테스트 전면
+    }
+  }
+
+  InterstitialAd? _interstitialAd;
+  bool _isInterstitialReady = false;
+
+  // 초기화
+  Future<void> initialize() async {
+    try {
+      await MobileAds.instance.initialize();
+      _loadInterstitialAd();
+    } catch (e) {
+      debugPrint('AdMob 초기화 오류: $e');
+    }
+  }
+
+  // 전면 광고 로드
+  void _loadInterstitialAd() {
+    InterstitialAd.load(
+      adUnitId: interstitialAdUnitId,
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _interstitialAd = ad;
+          _isInterstitialReady = true;
+          _interstitialAd!.setImmersiveMode(true);
+        },
+        onAdFailedToLoad: (error) {
+          debugPrint('전면 광고 로드 실패: $error');
+          _isInterstitialReady = false;
+        },
+      ),
+    );
+  }
+
+  // 전면 광고 표시 (Pro 유저가 아닌 경우만)
+  Future<void> showInterstitialAd({VoidCallback? onAdClosed}) async {
+    // Pro 유저는 광고 안 보여줌
+    if (SubscriptionService().isProUser) {
+      onAdClosed?.call();
+      return;
+    }
+
+    if (_isInterstitialReady && _interstitialAd != null) {
+      _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+        onAdDismissedFullScreenContent: (ad) {
+          ad.dispose();
+          _isInterstitialReady = false;
+          _loadInterstitialAd(); // 다음 광고 로드
+          onAdClosed?.call();
+        },
+        onAdFailedToShowFullScreenContent: (ad, error) {
+          ad.dispose();
+          _isInterstitialReady = false;
+          _loadInterstitialAd();
+          onAdClosed?.call();
+        },
+      );
+      await _interstitialAd!.show();
+    } else {
+      onAdClosed?.call();
+    }
+  }
+
+}
+
+// 네이티브 광고 위젯
+class NativeAdWidget extends StatefulWidget {
+  const NativeAdWidget({super.key});
+
+  @override
+  State<NativeAdWidget> createState() => _NativeAdWidgetState();
+}
+
+class _NativeAdWidgetState extends State<NativeAdWidget> {
+  NativeAd? _nativeAd;
+  bool _isLoaded = false;
+
+  // 테스트 네이티브 광고 ID
+  static String get nativeAdUnitId {
+    if (Platform.isIOS) {
+      return 'ca-app-pub-3940256099942544/3986624511'; // iOS 테스트 네이티브
+    } else {
+      return 'ca-app-pub-3940256099942544/2247696110'; // Android 테스트 네이티브
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAd();
+  }
+
+  void _loadAd() {
+    _nativeAd = NativeAd(
+      adUnitId: nativeAdUnitId,
+      listener: NativeAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) {
+            setState(() => _isLoaded = true);
+          }
+        },
+        onAdFailedToLoad: (ad, error) {
+          debugPrint('네이티브 광고 로드 실패: $error');
+          ad.dispose();
+        },
+      ),
+      request: const AdRequest(),
+      nativeTemplateStyle: NativeTemplateStyle(
+        templateType: TemplateType.medium,
+        mainBackgroundColor: Colors.black,
+        cornerRadius: 16,
+        callToActionTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.white,
+          backgroundColor: const Color(0xFF2196F3),
+          style: NativeTemplateFontStyle.bold,
+          size: 14,
+        ),
+        primaryTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.white,
+          style: NativeTemplateFontStyle.bold,
+          size: 14,
+        ),
+        secondaryTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.white70,
+          style: NativeTemplateFontStyle.normal,
+          size: 12,
+        ),
+        tertiaryTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.white54,
+          style: NativeTemplateFontStyle.normal,
+          size: 12,
+        ),
+      ),
+    )..load();
+  }
+
+  @override
+  void dispose() {
+    _nativeAd?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Pro 유저는 광고 안 보여줌
+    if (SubscriptionService().isProUser) {
+      return const SizedBox.shrink();
+    }
+
+    if (!_isLoaded || _nativeAd == null) {
+      return const SizedBox(height: 300);
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          height: 300,
+          child: AdWidget(ad: _nativeAd!),
+        ),
+      ),
+    );
+  }
+}
 
 // 최근 편집 이미지 관리
 class RecentImages {
@@ -46,8 +347,15 @@ class RecentImages {
   }
 }
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // RevenueCat 초기화
+  await SubscriptionService().initialize();
+
+  // AdMob 초기화
+  await AdService().initialize();
+
   runApp(const CoverApp());
 }
 
@@ -568,6 +876,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
+
+                    // 네이티브 광고
+                    const SizedBox(height: 24),
+                    const NativeAdWidget(),
 
                     // 최근 편집 이미지
                     if (_recentImages.isNotEmpty) ...[
@@ -2518,6 +2830,9 @@ class _EditorScreenState extends State<EditorScreen> {
               backgroundColor: Colors.green,
             ),
           );
+
+          // 저장 완료 후 전면 광고 표시 (Pro 유저 제외)
+          AdService().showInterstitialAd();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -4071,8 +4386,104 @@ class SettingsScreen extends StatelessWidget {
 }
 
 // Pro 구독 바텀시트
-class _ProSubscriptionSheet extends StatelessWidget {
+class _ProSubscriptionSheet extends StatefulWidget {
   const _ProSubscriptionSheet();
+
+  @override
+  State<_ProSubscriptionSheet> createState() => _ProSubscriptionSheetState();
+}
+
+class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
+  final SubscriptionService _subscriptionService = SubscriptionService();
+  List<Package>? _packages;
+  bool _isLoading = false;
+  int _selectedPlanIndex = 0; // 0: 연간, 1: 월간
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOfferings();
+  }
+
+  Future<void> _loadOfferings() async {
+    final packages = await _subscriptionService.getOfferings();
+    if (mounted) {
+      setState(() => _packages = packages);
+    }
+  }
+
+  Future<void> _purchase() async {
+    if (_isLoading) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // 실제 패키지가 있으면 구매 진행
+      if (_packages != null && _packages!.isNotEmpty) {
+        final package = _packages![_selectedPlanIndex];
+        final success = await _subscriptionService.purchasePackage(package);
+
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(success ? 'Pro 구독이 활성화되었습니다!' : '구매가 취소되었습니다'),
+              backgroundColor: success ? Colors.green : Colors.orange,
+            ),
+          );
+        }
+      } else {
+        // 테스트 모드 (API 키 미설정)
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('RevenueCat API 키를 설정해주세요'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('오류: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _restorePurchases() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final success = await _subscriptionService.restorePurchases();
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success ? '구독이 복원되었습니다!' : '복원할 구독이 없습니다'),
+            backgroundColor: success ? Colors.green : Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('복원 오류: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -4133,16 +4544,22 @@ class _ProSubscriptionSheet extends StatelessWidget {
               children: [
                 _buildPriceOption(
                   context,
+                  index: 0,
                   title: '연간',
-                  price: '₩19,900/년',
+                  price: _packages != null && _packages!.length > 0
+                      ? _packages![0].storeProduct.priceString
+                      : '₩19,900/년',
                   subtitle: '월 ₩1,658 (44% 할인)',
                   isPopular: true,
                 ),
                 const SizedBox(height: 12),
                 _buildPriceOption(
                   context,
+                  index: 1,
                   title: '월간',
-                  price: '₩2,900/월',
+                  price: _packages != null && _packages!.length > 1
+                      ? _packages![1].storeProduct.priceString
+                      : '₩2,900/월',
                   subtitle: '',
                   isPopular: false,
                 ),
@@ -4159,13 +4576,7 @@ class _ProSubscriptionSheet extends StatelessWidget {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: () {
-                  // TODO: 실제 구독 처리
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('곧 출시 예정입니다!')),
-                  );
-                },
+                onPressed: _isLoading ? null : _purchase,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6366F1),
                   foregroundColor: Colors.white,
@@ -4173,10 +4584,19 @@ class _ProSubscriptionSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  '무료 체험 시작하기',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        '무료 체험 시작하기',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
               ),
             ),
           ),
@@ -4189,9 +4609,7 @@ class _ProSubscriptionSheet extends StatelessWidget {
             style: TextStyle(color: Colors.grey[500], fontSize: 12),
           ),
           TextButton(
-            onPressed: () {
-              // TODO: 구독 복원
-            },
+            onPressed: _isLoading ? null : _restorePurchases,
             child: Text(
               '이전 구매 복원',
               style: TextStyle(color: Colors.grey[600], fontSize: 12),
@@ -4219,60 +4637,83 @@ class _ProSubscriptionSheet extends StatelessWidget {
 
   Widget _buildPriceOption(
     BuildContext context, {
+    required int index,
     required String title,
     required String price,
     required String subtitle,
     required bool isPopular,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: isPopular ? const Color(0xFF6366F1) : Colors.grey[300]!,
-          width: isPopular ? 2 : 1,
+    final isSelected = _selectedPlanIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedPlanIndex = index),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: isSelected ? const Color(0xFF6366F1) : Colors.grey[300]!,
+            width: isSelected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          color: isSelected ? const Color(0xFF6366F1).withValues(alpha: 0.1) : null,
         ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                    if (isPopular) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF6366F1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          '인기',
-                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ],
+        child: Row(
+          children: [
+            // 선택 표시
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? const Color(0xFF6366F1) : Colors.grey[400]!,
+                  width: 2,
                 ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(subtitle, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                ],
-              ],
+                color: isSelected ? const Color(0xFF6366F1) : Colors.transparent,
+              ),
+              child: isSelected
+                  ? const Icon(Icons.check, color: Colors.white, size: 16)
+                  : null,
             ),
-          ),
-          Text(
-            price,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                      if (isPopular) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            '인기',
+                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(subtitle, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                  ],
+                ],
+              ),
+            ),
+            Text(
+              price,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
       ),
     );
   }
