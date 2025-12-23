@@ -17,6 +17,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 // 테마 모드 관리
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
@@ -4425,7 +4427,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _rateApp(BuildContext context) async {
     final url = Platform.isIOS
         ? Uri.parse('https://apps.apple.com/app/id$_appStoreId?action=write-review')
-        : Uri.parse('https://play.google.com/store/apps/details?id=com.cover.app');
+        : Uri.parse('https://play.google.com/store/apps/details?id=com.devyulstudio.cover');
 
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -4439,12 +4441,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _sendEmail() async {
+    // 기기 정보 수집
+    String deviceInfo = '';
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final deviceInfoPlugin = DeviceInfoPlugin();
+
+      if (Platform.isIOS) {
+        final iosInfo = await deviceInfoPlugin.iosInfo;
+        deviceInfo = '''
+---
+앱 버전: ${packageInfo.version} (${packageInfo.buildNumber})
+기기 모델: ${iosInfo.model}
+기기 이름: ${iosInfo.name}
+시스템: ${iosInfo.systemName} ${iosInfo.systemVersion}
+''';
+      } else if (Platform.isAndroid) {
+        final androidInfo = await deviceInfoPlugin.androidInfo;
+        deviceInfo = '''
+---
+앱 버전: ${packageInfo.version} (${packageInfo.buildNumber})
+기기 모델: ${androidInfo.model}
+제조사: ${androidInfo.manufacturer}
+시스템: Android ${androidInfo.version.release} (SDK ${androidInfo.version.sdkInt})
+''';
+      }
+    } catch (e) {
+      deviceInfo = '\n---\n기기 정보를 가져올 수 없습니다.';
+    }
+
     final uri = Uri(
       scheme: 'mailto',
-      path: 'support@cover.app',
+      path: 'parksy785@gmail.com',
       queryParameters: {
         'subject': '[Cover 앱 문의]',
-        'body': '\n\n---\n앱 버전: 1.0.0\n기기: ${Platform.operatingSystem}',
+        'body': '\n\n문의 내용을 입력해주세요.\n$deviceInfo',
       },
     );
 
@@ -4584,7 +4615,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _SettingsTile(
             icon: Icons.mail_outline,
             title: '문의하기',
-            subtitle: 'support@cover.app',
+            subtitle: 'parksy785@gmail.com',
             onTap: _sendEmail,
           ),
 
