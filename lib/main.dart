@@ -426,32 +426,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
         },
       ),
       request: const AdRequest(),
-      nativeTemplateStyle: NativeTemplateStyle(
-        templateType: TemplateType.medium,
-        mainBackgroundColor: Colors.black,
-        cornerRadius: 16,
-        callToActionTextStyle: NativeTemplateTextStyle(
-          textColor: Colors.white,
-          backgroundColor: const Color(0xFF2196F3),
-          style: NativeTemplateFontStyle.bold,
-          size: 14,
-        ),
-        primaryTextStyle: NativeTemplateTextStyle(
-          textColor: Colors.white,
-          style: NativeTemplateFontStyle.bold,
-          size: 14,
-        ),
-        secondaryTextStyle: NativeTemplateTextStyle(
-          textColor: Colors.white70,
-          style: NativeTemplateFontStyle.normal,
-          size: 12,
-        ),
-        tertiaryTextStyle: NativeTemplateTextStyle(
-          textColor: Colors.white54,
-          style: NativeTemplateFontStyle.normal,
-          size: 12,
-        ),
-      ),
+      factoryId: 'listTile',
     )..load();
   }
 
@@ -469,19 +444,18 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
     }
 
     if (!_isLoaded || _nativeAd == null) {
-      return const SizedBox(height: 300);
+      return const SizedBox(height: 136);
     }
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white12),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: SizedBox(
-          height: 300,
+          height: 136,
           child: AdWidget(ad: _nativeAd!),
         ),
       ),
@@ -1042,21 +1016,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   children: [
                     const SizedBox(height: 40),
-                    Text(
-                      'Cover',
-                      style: TextStyle(
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '개인정보를 안전하게',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: subtitleColor,
-                      ),
+                    Stack(
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 24),
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            height: 280,
+                          ),
+                        ),
+                        Text(
+                          'Cover',
+                          style: TextStyle(
+                            fontSize: 56,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 48),
                     SizedBox(

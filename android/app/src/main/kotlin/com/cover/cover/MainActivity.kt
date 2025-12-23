@@ -12,14 +12,14 @@ class MainActivity : FlutterActivity() {
         // Register the native ad factory with the same factoryId used in Dart code
         GoogleMobileAdsPlugin.registerNativeAdFactory(
             flutterEngine,
-            "list",
+            "listTile",
             NativeAdFactory(this)
         )
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         // Unregister when the activity is destroyed
-        GoogleMobileAdsPlugin.unregisterNativeAdFactory(flutterEngine, "list")
+        GoogleMobileAdsPlugin.unregisterNativeAdFactory(flutterEngine, "listTile")
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }
