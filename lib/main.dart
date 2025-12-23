@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_cropper/image_cropper.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
@@ -3289,47 +3289,42 @@ class _EditorScreenState extends State<EditorScreen> {
       final timestamp = DateTime.now().toString().replaceAll(RegExp(r'[^0-9]'), '').substring(0, 14);
       final fileName = 'Cover_$timestamp';
 
+      // 임시 파일에 저장 후 갤러리에 추가
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/$fileName.jpg');
+      await tempFile.writeAsBytes(finalBytes);
+
       // 갤러리에 저장
-      final result = await ImageGallerySaver.saveImage(
-        finalBytes,
-        quality: quality.jpegQuality,
-        name: fileName,
-      );
+      await Gal.putImage(tempFile.path, album: 'Cover');
+
+      // 임시 파일 삭제
+      await tempFile.delete();
 
       if (mounted) {
-        if (result['isSuccess'] == true) {
-          // 최근 이미지에 원본 경로 추가
-          await RecentImages.addImage(widget.imageFile.path);
+        // 최근 이미지에 원본 경로 추가
+        await RecentImages.addImage(widget.imageFile.path);
 
-          // 저장 횟수 증가 (무료 사용자)
-          await SaveLimitService.incrementSaveCount();
+        // 저장 횟수 증가 (무료 사용자)
+        await SaveLimitService.incrementSaveCount();
 
-          // Analytics 이벤트
-          AnalyticsService().logImageSaved(quality: quality.label);
+        // Analytics 이벤트
+        AnalyticsService().logImageSaved(quality: quality.label);
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Text('${quality.label} 품질로 저장되었습니다'),
-                ],
-              ),
-              backgroundColor: Colors.green,
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Text('${quality.label} 품질로 저장되었습니다'),
+              ],
             ),
-          );
+            backgroundColor: Colors.green,
+          ),
+        );
 
-          // 저장 완료 후 전면 광고 표시 (Pro 유저 제외)
-          AdService().showInterstitialAd();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('저장에 실패했습니다'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        // 저장 완료 후 전면 광고 표시 (Pro 유저 제외)
+        AdService().showInterstitialAd();
       }
     } catch (e) {
       if (mounted) {

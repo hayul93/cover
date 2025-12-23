@@ -18,7 +18,7 @@ dependencies:
   # File & Storage
   path_provider: ^2.1.2
   share_plus: ^10.1.2
-  image_gallery_saver: ^2.0.3
+  gal: ^2.3.0
 
   # Utilities
   permission_handler: ^12.0.1
