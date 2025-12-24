@@ -1632,6 +1632,7 @@ class _EditorScreenState extends State<EditorScreen> {
   final List<StickerData> _stickers = [];
   int? _selectedStickerIndex;
   double _initialStickerScale = 1.0;
+  double _initialStickerRotation = 0.0;
 
   // 텍스트 오버레이 관련
   final List<TextOverlayData> _textOverlays = [];
@@ -3072,6 +3073,7 @@ class _EditorScreenState extends State<EditorScreen> {
           onScaleStart: (details) {
             setState(() => _selectedStickerIndex = index);
             _initialStickerScale = sticker.scale;
+            _initialStickerRotation = sticker.rotation;
           },
           onScaleUpdate: (details) {
             if (_selectedStickerIndex == index) {
@@ -3083,45 +3085,112 @@ class _EditorScreenState extends State<EditorScreen> {
                   (sticker.position.dx + dx).clamp(0.0, 1.0),
                   (sticker.position.dy + dy).clamp(0.0, 1.0),
                 );
-                // 스케일 (두 손가락 제스처)
-                if (details.scale != 1.0) {
-                  sticker.scale = (_initialStickerScale * details.scale).clamp(0.5, 3.0);
+                // 두 손가락 제스처: 스케일 + 회전
+                if (details.pointerCount >= 2) {
+                  sticker.scale = (_initialStickerScale * details.scale).clamp(0.3, 5.0);
+                  sticker.rotation = _initialStickerRotation + details.rotation;
                 }
               });
             }
           },
           child: Transform.scale(
             scale: _scale,
-            child: Container(
-              width: stickerSize,
-              height: sticker.isEmoji ? stickerSize : stickerSize * 0.5,
-              decoration: isSelected
-                  ? BoxDecoration(
-                      border: Border.all(color: AppColors.primary, width: 2),
-                      borderRadius: BorderRadius.circular(8),
-                    )
-                  : null,
-              child: Center(
-                child: sticker.isEmoji
-                    ? Text(
-                        sticker.content,
-                        style: TextStyle(fontSize: stickerSize * 0.7),
-                      )
-                    : Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          sticker.content,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: stickerSize * 0.2,
-                            fontWeight: FontWeight.bold,
+            child: Transform.rotate(
+              angle: sticker.rotation,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // 스티커 본체
+                  Container(
+                    width: stickerSize,
+                    height: sticker.isEmoji ? stickerSize : stickerSize * 0.5,
+                    decoration: isSelected
+                        ? BoxDecoration(
+                            border: Border.all(color: AppColors.primary, width: 2),
+                            borderRadius: BorderRadius.circular(8),
+                          )
+                        : null,
+                    child: Center(
+                      child: sticker.isEmoji
+                          ? Text(
+                              sticker.content,
+                              style: TextStyle(fontSize: stickerSize * 0.7),
+                            )
+                          : Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                sticker.content,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: stickerSize * 0.2,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
+                  // 선택 시 컨트롤 핸들 표시
+                  if (isSelected) ...[
+                    // 크기 조절 핸들 (우하단)
+                    Positioned(
+                      right: -12,
+                      bottom: sticker.isEmoji ? -12 : -12 - stickerSize * 0.25,
+                      child: GestureDetector(
+                        onPanUpdate: (details) {
+                          setState(() {
+                            final delta = (details.delta.dx + details.delta.dy) / 2;
+                            sticker.scale = (sticker.scale + delta / 50).clamp(0.3, 5.0);
+                          });
+                        },
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
                           ),
+                          child: const Icon(Icons.open_in_full, size: 14, color: Colors.white),
                         ),
                       ),
+                    ),
+                    // 회전 핸들 (상단 중앙)
+                    Positioned(
+                      left: stickerSize / 2 - 12,
+                      top: -36,
+                      child: Column(
+                        children: [
+                          GestureDetector(
+                            onPanUpdate: (details) {
+                              setState(() {
+                                sticker.rotation += details.delta.dx / 50;
+                              });
+                            },
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: const Icon(Icons.rotate_right, size: 14, color: Colors.white),
+                            ),
+                          ),
+                          Container(
+                            width: 2,
+                            height: 12,
+                            color: AppColors.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
@@ -3552,6 +3621,7 @@ class _EditorScreenState extends State<EditorScreen> {
             positionX: s.position.dx,
             positionY: s.position.dy,
             scale: s.scale,
+            rotation: s.rotation,
             isEmoji: s.isEmoji,
           )).toList(),
         ));
@@ -3698,6 +3768,7 @@ class StickerInfo {
   final double positionX;
   final double positionY;
   final double scale;
+  final double rotation;
   final bool isEmoji;
 
   StickerInfo({
@@ -3705,6 +3776,7 @@ class StickerInfo {
     required this.positionX,
     required this.positionY,
     required this.scale,
+    required this.rotation,
     required this.isEmoji,
   });
 }
@@ -3733,8 +3805,12 @@ Uint8List compositeStickers(CompositeRequest request) {
     final baseSize = sticker.isEmoji ? 60 : 80;
     final size = (baseSize * sticker.scale).toInt();
 
+    // 회전 값
+    final cosR = cos(sticker.rotation);
+    final sinR = sin(sticker.rotation);
+
     if (sticker.isEmoji) {
-      // 이모지: 검은색 원으로 가리기 (이모지는 이미지로 렌더링 어려움)
+      // 이모지: 검은색 원으로 가리기 (회전해도 원은 동일)
       final halfSize = size ~/ 2;
       for (int dy = -halfSize; dy < halfSize; dy++) {
         for (int dx = -halfSize; dx < halfSize; dx++) {
@@ -3748,15 +3824,24 @@ Uint8List compositeStickers(CompositeRequest request) {
         }
       }
     } else {
-      // 텍스트 라벨: 검은색 사각형으로 가리기
+      // 텍스트 라벨: 회전된 검은색 사각형으로 가리기
       final halfWidth = size ~/ 2;
       final halfHeight = size ~/ 4;
-      for (int dy = -halfHeight; dy < halfHeight; dy++) {
-        for (int dx = -halfWidth; dx < halfWidth; dx++) {
-          final px = x + dx;
-          final py = y + dy;
-          if (px >= 0 && px < image.width && py >= 0 && py < image.height) {
-            image.setPixel(px, py, img.ColorRgba8(0, 0, 0, 255));
+
+      // 회전된 사각형의 모든 점을 채우기 위해 더 넓은 범위 스캔
+      final scanRange = (halfWidth > halfHeight ? halfWidth : halfHeight) + 5;
+      for (int dy = -scanRange; dy <= scanRange; dy++) {
+        for (int dx = -scanRange; dx <= scanRange; dx++) {
+          // 역회전하여 원래 사각형 내부인지 확인
+          final origDx = (dx * cosR + dy * sinR).round();
+          final origDy = (-dx * sinR + dy * cosR).round();
+
+          if (origDx.abs() <= halfWidth && origDy.abs() <= halfHeight) {
+            final px = x + dx;
+            final py = y + dy;
+            if (px >= 0 && px < image.width && py >= 0 && py < image.height) {
+              image.setPixel(px, py, img.ColorRgba8(0, 0, 0, 255));
+            }
           }
         }
       }
