@@ -20,6 +20,9 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'config/api_keys.dart';
+import 'config/constants.dart';
+
 // 테마 모드 관리
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 
@@ -124,15 +127,11 @@ class SubscriptionService {
   factory SubscriptionService() => _instance;
   SubscriptionService._internal();
 
-  // RevenueCat API 키
-  static const String _apiKeyIOS = 'appl_RTTbxEwnpxhUZNsrKdmimCGYjdy';
-  static const String _apiKeyAndroid = 'goog_EwguVFnVbUlHDvtNRKoQVjXhlFW';
-
-  // 상품 ID
-  static const String entitlementId = 'pro';
-  static const String monthlyProductId = 'cover_pro_monthly';
-  static const String yearlyProductId = 'cover_pro_yearly';
-  static const String lifetimeProductId = 'cover_pro_lifetime';
+  // 상품 ID (constants.dart에서 가져옴)
+  static String get entitlementId => ProductIds.entitlementId;
+  static String get monthlyProductId => ProductIds.monthly;
+  static String get yearlyProductId => ProductIds.yearly;
+  static String get lifetimeProductId => ProductIds.lifetime;
 
   // 구독 상태
   final ValueNotifier<bool> isPro = ValueNotifier(false);
@@ -146,7 +145,7 @@ class SubscriptionService {
   // 초기화
   Future<void> initialize() async {
     try {
-      final apiKey = Platform.isIOS ? _apiKeyIOS : _apiKeyAndroid;
+      final apiKey = ApiKeys.revenueCat;
 
       // 실제 API 키가 설정되지 않은 경우 건너뛰기
       if (apiKey.contains('YOUR_')) {
@@ -285,7 +284,7 @@ class SubscriptionService {
 class SaveLimitService {
   static const String _saveCountKey = 'daily_save_count';
   static const String _saveDateKey = 'save_date';
-  static const int maxFreeSavesPerDay = 5;
+  static int get maxFreeSavesPerDay => AppConstants.maxFreeSavesPerDay;
 
   // 오늘 저장 횟수 가져오기
   static Future<int> getTodaySaveCount() async {
@@ -340,20 +339,6 @@ class AdService {
   factory AdService() => _instance;
   AdService._internal();
 
-  // 전면 광고 ID (디버그: 테스트 ID, 릴리즈: 실제 ID)
-  static String get interstitialAdUnitId {
-    if (kDebugMode) {
-      // 테스트 광고 ID
-      return Platform.isIOS
-          ? 'ca-app-pub-3940256099942544/4411468910'
-          : 'ca-app-pub-3940256099942544/1033173712';
-    }
-    // 실제 광고 ID
-    return Platform.isIOS
-        ? 'ca-app-pub-3438920793636799/2729421253'
-        : 'ca-app-pub-3438920793636799/8197370353';
-  }
-
   InterstitialAd? _interstitialAd;
   bool _isInterstitialReady = false;
 
@@ -370,7 +355,7 @@ class AdService {
   // 전면 광고 로드
   void _loadInterstitialAd() {
     InterstitialAd.load(
-      adUnitId: interstitialAdUnitId,
+      adUnitId: ApiKeys.interstitialAdUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
@@ -429,20 +414,6 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
   NativeAd? _nativeAd;
   bool _isLoaded = false;
 
-  // 네이티브 광고 ID (디버그: 테스트 ID, 릴리즈: 실제 ID)
-  static String get nativeAdUnitId {
-    if (kDebugMode) {
-      // 테스트 광고 ID
-      return Platform.isIOS
-          ? 'ca-app-pub-3940256099942544/3986624511'
-          : 'ca-app-pub-3940256099942544/2247696110';
-    }
-    // 실제 광고 ID
-    return Platform.isIOS
-        ? 'ca-app-pub-3438920793636799/1091431175'
-        : 'ca-app-pub-3438920793636799/3384027376';
-  }
-
   @override
   void initState() {
     super.initState();
@@ -451,7 +422,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
 
   void _loadAd() {
     _nativeAd = NativeAd(
-      adUnitId: nativeAdUnitId,
+      adUnitId: ApiKeys.nativeAdUnitId,
       listener: NativeAdListener(
         onAdLoaded: (ad) {
           if (mounted) {
@@ -488,7 +459,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white12),
-          color: const Color(0xFF1A1A1A),
+          color: AppColors.cardDark,
         ),
         child: Padding(
           padding: const EdgeInsets.all(8),
@@ -526,7 +497,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFFCC66),
+                            color: AppColors.proBadge,
                             borderRadius: BorderRadius.circular(2),
                           ),
                           child: const Text(
@@ -715,14 +686,14 @@ class CoverApp extends StatelessWidget {
           themeMode: themeMode,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF2196F3),
+              seedColor: AppColors.primary,
               brightness: Brightness.light,
             ),
             useMaterial3: true,
           ),
           darkTheme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF2196F3),
+              seedColor: AppColors.primary,
               brightness: Brightness.dark,
             ),
             useMaterial3: true,
@@ -797,7 +768,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       icon: Icons.shield,
       title: '개인정보를 안전하게',
       description: '사진 속 민감한 정보를\n3초 만에 블러 처리하세요',
-      color: const Color(0xFF2196F3),
+      color: AppColors.primary,
     ),
     OnboardingPage(
       icon: Icons.blur_on,
@@ -1032,7 +1003,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onTap: (index) => setState(() => _currentIndex = index),
           type: BottomNavigationBarType.fixed,
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          selectedItemColor: const Color(0xFF2196F3),
+          selectedItemColor: AppColors.primary,
           unselectedItemColor: Colors.grey,
           selectedFontSize: 12,
           unselectedFontSize: 12,
@@ -1176,7 +1147,7 @@ class _HomeTabState extends State<_HomeTab> {
                       icon: const Icon(Icons.photo_library_rounded),
                       label: const Text('갤러리', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2196F3),
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
                       ),
@@ -1208,7 +1179,7 @@ class _HomeTabState extends State<_HomeTab> {
           if (_isLoading)
             Container(
               color: Colors.black54,
-              child: const Center(child: CircularProgressIndicator(color: Color(0xFF2196F3))),
+              child: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
             ),
         ],
       ),
@@ -1279,7 +1250,7 @@ class _RecentImagesTabState extends State<_RecentImagesTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
+        backgroundColor: AppColors.cardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('최근 이미지 삭제', style: TextStyle(color: Colors.white)),
         content: const Text(
@@ -1345,7 +1316,7 @@ class _RecentImagesTabState extends State<_RecentImagesTab> {
           // 이미지 그리드
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF2196F3)))
+                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
                 : _recentImages.isEmpty
                     ? Center(
                         child: Column(
@@ -1367,7 +1338,7 @@ class _RecentImagesTabState extends State<_RecentImagesTab> {
                       )
                     : RefreshIndicator(
                         onRefresh: _loadRecentImages,
-                        color: const Color(0xFF2196F3),
+                        color: AppColors.primary,
                         child: GridView.builder(
                           padding: const EdgeInsets.all(16),
                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -1611,7 +1582,6 @@ class _EditorScreenState extends State<EditorScreen> {
   // 스티커
   final List<StickerData> _stickers = [];
   int? _selectedStickerIndex;
-  Offset? _stickerDragStart;
   double _initialStickerScale = 1.0;
 
   // 텍스트 오버레이 관련
@@ -1629,6 +1599,14 @@ class _EditorScreenState extends State<EditorScreen> {
   void initState() {
     super.initState();
     _loadImage();
+  }
+
+  @override
+  void dispose() {
+    // 메모리 누수 방지: ui.Image 리소스 해제
+    _displayImage?.dispose();
+    _originalDisplayImage?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadImage() async {
@@ -1826,7 +1804,7 @@ class _EditorScreenState extends State<EditorScreen> {
             toolbarColor: Colors.black,
             toolbarWidgetColor: Colors.white,
             backgroundColor: Colors.black,
-            activeControlsWidgetColor: const Color(0xFF2196F3),
+            activeControlsWidgetColor: AppColors.primary,
             initAspectRatio: CropAspectRatioPreset.original,
             lockAspectRatio: false,
             aspectRatioPresets: [
@@ -1988,7 +1966,7 @@ class _EditorScreenState extends State<EditorScreen> {
           IconButton(
             icon: Icon(
               Icons.compare,
-              color: _compareMode ? const Color(0xFF2196F3) : Colors.white,
+              color: _compareMode ? AppColors.primary : Colors.white,
             ),
             onPressed: () {
               setState(() => _compareMode = !_compareMode);
@@ -2073,8 +2051,10 @@ class _EditorScreenState extends State<EditorScreen> {
                             child: ClipRect(
                               child: Transform(
                                 transform: Matrix4.identity()
-                                  ..translate(_offset.dx, _offset.dy)
-                                  ..scale(_scale),
+                                  ..setEntry(0, 0, _scale)
+                                  ..setEntry(1, 1, _scale)
+                                  ..setEntry(0, 3, _offset.dx)
+                                  ..setEntry(1, 3, _offset.dy),
                                 child: CustomPaint(
                                   size: canvasSize,
                                   painter: ImageCanvasPainter(
@@ -2136,13 +2116,13 @@ class _EditorScreenState extends State<EditorScreen> {
 
           // 로딩 표시
           if (_isProcessing)
-            const LinearProgressIndicator(color: Color(0xFF2196F3)),
+            const LinearProgressIndicator(color: AppColors.primary),
 
           // 도구 패널 토글 버튼
           GestureDetector(
             onTap: () => setState(() => _toolsVisible = !_toolsVisible),
             child: Container(
-              color: const Color(0xFF1A1A1A),
+              color: AppColors.cardDark,
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Center(
                 child: Container(
@@ -2180,7 +2160,7 @@ class _EditorScreenState extends State<EditorScreen> {
               duration: const Duration(milliseconds: 200),
               opacity: _toolsVisible ? 1.0 : 0.0,
               child: _toolsVisible ? Container(
-                color: const Color(0xFF1A1A1A),
+                color: AppColors.cardDark,
                 child: SafeArea(
                   top: false,
                   child: Padding(
@@ -2288,7 +2268,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
           // 3. 저장/공유 버튼 (항상 표시)
           Container(
-            color: const Color(0xFF1A1A1A),
+            color: AppColors.cardDark,
             child: SafeArea(
               top: false,
               child: Padding(
@@ -2303,7 +2283,7 @@ class _EditorScreenState extends State<EditorScreen> {
                           icon: const Icon(Icons.save_alt, size: 18),
                           label: const Text('저장', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2196F3),
+                            backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
                           ),
@@ -2433,7 +2413,7 @@ class _EditorScreenState extends State<EditorScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF2196F3) : Colors.white.withValues(alpha: 0.1),
+          color: isSelected ? AppColors.primary : Colors.white.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -2469,7 +2449,7 @@ class _EditorScreenState extends State<EditorScreen> {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF2196F3) : Colors.white.withValues(alpha: 0.1),
+            color: isSelected ? AppColors.primary : Colors.white.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(icon, color: isSelected ? Colors.white : Colors.white70, size: 18),
@@ -2509,7 +2489,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 child: Column(
                   children: [
                     const TabBar(
-                      indicatorColor: Color(0xFF2196F3),
+                      indicatorColor: AppColors.primary,
                       labelColor: Colors.white,
                       unselectedLabelColor: Colors.white54,
                       tabs: [
@@ -2637,7 +2617,7 @@ class _EditorScreenState extends State<EditorScreen> {
               child: Container(
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2196F3),
+                  color: AppColors.primary,
                   borderRadius: BorderRadius.circular(22),
                 ),
                 child: const Row(
@@ -2725,7 +2705,7 @@ class _EditorScreenState extends State<EditorScreen> {
                   child: Container(
                     height: 44,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2196F3),
+                      color: AppColors.primary,
                       borderRadius: BorderRadius.circular(22),
                     ),
                     child: const Row(
@@ -2838,7 +2818,7 @@ class _EditorScreenState extends State<EditorScreen> {
           color: color == Colors.transparent ? null : color,
           shape: BoxShape.circle,
           border: Border.all(
-            color: isSelected ? const Color(0xFF2196F3) : Colors.white38,
+            color: isSelected ? AppColors.primary : Colors.white38,
             width: isSelected ? 3 : 1,
           ),
         ),
@@ -2977,7 +2957,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 color: textData.hasBackground ? textData.backgroundColor : null,
                 borderRadius: BorderRadius.circular(4),
                 border: isSelected
-                    ? Border.all(color: const Color(0xFF2196F3), width: 2)
+                    ? Border.all(color: AppColors.primary, width: 2)
                     : null,
               ),
               child: Text(
@@ -3036,10 +3016,7 @@ class _EditorScreenState extends State<EditorScreen> {
             setState(() => _selectedStickerIndex = index);
           },
           onScaleStart: (details) {
-            setState(() {
-              _selectedStickerIndex = index;
-              _stickerDragStart = sticker.position;
-            });
+            setState(() => _selectedStickerIndex = index);
             _initialStickerScale = sticker.scale;
           },
           onScaleUpdate: (details) {
@@ -3066,7 +3043,7 @@ class _EditorScreenState extends State<EditorScreen> {
               height: sticker.isEmoji ? stickerSize : stickerSize * 0.5,
               decoration: isSelected
                   ? BoxDecoration(
-                      border: Border.all(color: const Color(0xFF2196F3), width: 2),
+                      border: Border.all(color: AppColors.primary, width: 2),
                       borderRadius: BorderRadius.circular(8),
                     )
                   : null,
@@ -3139,7 +3116,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     value: value,
                     min: min,
                     max: max,
-                    activeColor: const Color(0xFF2196F3),
+                    activeColor: AppColors.primary,
                     inactiveColor: Colors.white24,
                     onChanged: onChanged,
                   ),
@@ -3187,7 +3164,7 @@ class _EditorScreenState extends State<EditorScreen> {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF2196F3) : Colors.white12,
+          color: isSelected ? AppColors.primary : Colors.white12,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Center(
@@ -3338,7 +3315,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 color: isDisabled
                     ? Colors.white.withValues(alpha: 0.04)
                     : isRecommended
-                        ? const Color(0xFF2196F3).withValues(alpha: 0.2)
+                        ? AppColors.primary.withValues(alpha: 0.2)
                         : Colors.white.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -3349,7 +3326,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     color: isDisabled
                         ? Colors.white30
                         : isRecommended
-                            ? const Color(0xFF2196F3)
+                            ? AppColors.primary
                             : Colors.white70,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -3396,7 +3373,7 @@ class _EditorScreenState extends State<EditorScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF2196F3),
+                            color: AppColors.primary,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
@@ -3446,7 +3423,7 @@ class _EditorScreenState extends State<EditorScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
+        backgroundColor: AppColors.cardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
@@ -3594,6 +3571,7 @@ class _EditorScreenState extends State<EditorScreen> {
         // Analytics 이벤트
         AnalyticsService().logImageSaved(quality: quality.label);
 
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
