@@ -1572,6 +1572,55 @@ class _EditorScreenState extends State<EditorScreen> {
   Offset _offset = Offset.zero;
   Offset _previousOffset = Offset.zero;
 
+  /// 오프셋을 이미지 경계 내로 제한하고 중앙 배치
+  Offset _clampOffset(Offset offset, Size canvasSize) {
+    if (_displayImage == null) return offset;
+
+    // 이미지 fitting 계산 (ImageCanvasPainter와 동일한 로직)
+    final imageSize = Size(
+      _displayImage!.width.toDouble(),
+      _displayImage!.height.toDouble(),
+    );
+    final fittedSize = applyBoxFit(BoxFit.contain, imageSize, canvasSize);
+    final fittedWidth = fittedSize.destination.width;
+    final fittedHeight = fittedSize.destination.height;
+
+    // 이미지가 캔버스에서 중앙에 위치할 때의 오프셋 (scale 1.0 기준)
+    final imageOffsetX = (canvasSize.width - fittedWidth) / 2;
+    final imageOffsetY = (canvasSize.height - fittedHeight) / 2;
+
+    // 스케일 적용 후 이미지 크기
+    final scaledWidth = fittedWidth * _scale;
+    final scaledHeight = fittedHeight * _scale;
+
+    double clampedX = offset.dx;
+    double clampedY = offset.dy;
+
+    // X축 처리
+    if (scaledWidth <= canvasSize.width) {
+      // 이미지가 캔버스보다 작으면 중앙 배치
+      clampedX = (canvasSize.width - scaledWidth) / 2 - imageOffsetX * _scale;
+    } else {
+      // 이미지가 캔버스보다 크면 경계 제한
+      final minX = canvasSize.width - (imageOffsetX + fittedWidth) * _scale;
+      final maxX = -imageOffsetX * _scale;
+      clampedX = clampedX.clamp(minX, maxX);
+    }
+
+    // Y축 처리
+    if (scaledHeight <= canvasSize.height) {
+      // 이미지가 캔버스보다 작으면 중앙 배치
+      clampedY = (canvasSize.height - scaledHeight) / 2 - imageOffsetY * _scale;
+    } else {
+      // 이미지가 캔버스보다 크면 경계 제한
+      final minY = canvasSize.height - (imageOffsetY + fittedHeight) * _scale;
+      final maxY = -imageOffsetY * _scale;
+      clampedY = clampedY.clamp(minY, maxY);
+    }
+
+    return Offset(clampedX, clampedY);
+  }
+
   // 이미지 회전
   int _rotation = 0; // 0, 90, 180, 270
 
@@ -2013,17 +2062,22 @@ class _EditorScreenState extends State<EditorScreen> {
                               if (details.pointerCount == 2) {
                                 // 두 손가락: 핀치 줌 + 팬
                                 setState(() {
-                                  final newScale = (_previousScale * details.scale).clamp(0.5, 4.0);
+                                  final newScale = (_previousScale * details.scale).clamp(
+                                    AppConstants.minZoomScale,
+                                    AppConstants.maxZoomScale,
+                                  );
                                   final focalPoint = details.localFocalPoint;
 
                                   // 스케일 변화가 거의 없으면 팬만 적용
                                   if ((details.scale - 1.0).abs() < 0.02) {
                                     // 순수 팬 모드
-                                    _offset = _previousOffset + details.focalPointDelta;
+                                    final newOffset = _previousOffset + details.focalPointDelta;
+                                    _offset = _clampOffset(newOffset, canvasSize);
                                   } else {
                                     // 핀치 줌 - 초점 기준 확대/축소
-                                    _offset = focalPoint - (focalPoint - _previousOffset) * (newScale / _previousScale);
                                     _scale = newScale;
+                                    final newOffset = focalPoint - (focalPoint - _previousOffset) * (newScale / _previousScale);
+                                    _offset = _clampOffset(newOffset, canvasSize);
                                   }
                                 });
                               } else if (details.pointerCount == 1) {
