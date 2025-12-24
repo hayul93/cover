@@ -5032,6 +5032,42 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
   bool _isLoading = false;
   int _selectedPlanIndex = 0; // 0: 평생, 1: 연간, 2: 월간
 
+  // 제품 ID로 패키지 찾기
+  Package? get _lifetimePackage => _packages?.cast<Package?>().firstWhere(
+    (p) => p?.storeProduct.identifier == SubscriptionService.lifetimeProductId,
+    orElse: () => null,
+  );
+
+  Package? get _yearlyPackage => _packages?.cast<Package?>().firstWhere(
+    (p) => p?.storeProduct.identifier == SubscriptionService.yearlyProductId,
+    orElse: () => null,
+  );
+
+  Package? get _monthlyPackage => _packages?.cast<Package?>().firstWhere(
+    (p) => p?.storeProduct.identifier == SubscriptionService.monthlyProductId,
+    orElse: () => null,
+  );
+
+  Package? get _selectedPackage {
+    switch (_selectedPlanIndex) {
+      case 0: return _lifetimePackage;
+      case 1: return _yearlyPackage;
+      case 2: return _monthlyPackage;
+      default: return null;
+    }
+  }
+
+  // 연간 구독 할인율 계산
+  String _getYearlySubtitle() {
+    final yearly = _yearlyPackage?.storeProduct.price ?? 15000;
+    final monthly = _monthlyPackage?.storeProduct.price ?? 2200;
+
+    final yearlyMonthly = yearly / 12;
+    final discount = ((monthly - yearlyMonthly) / monthly * 100).round();
+
+    return '월 ₩${yearlyMonthly.round().toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} ($discount% 할인)';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -5052,9 +5088,9 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
     setState(() => _isLoading = true);
 
     try {
-      // 실제 패키지가 있으면 구매 진행
-      if (_packages != null && _packages!.isNotEmpty) {
-        final package = _packages![_selectedPlanIndex];
+      // 선택한 패키지로 구매 진행
+      final package = _selectedPackage;
+      if (package != null) {
         final success = await _subscriptionService.purchasePackage(package);
 
         if (success) {
@@ -5072,12 +5108,11 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
           );
         }
       } else {
-        // 테스트 모드 (API 키 미설정)
+        // 패키지를 찾을 수 없음
         if (mounted) {
-          Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('RevenueCat API 키를 설정해주세요'),
+              content: Text('상품 정보를 불러올 수 없습니다'),
               backgroundColor: Colors.orange,
             ),
           );
@@ -5199,9 +5234,7 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                           context,
                           index: 0,
                           title: '평생 이용권',
-                          price: _packages != null && _packages!.length > 2
-                              ? _packages![2].storeProduct.priceString
-                              : '₩22,000',
+                          price: _lifetimePackage?.storeProduct.priceString ?? '₩22,000',
                           subtitle: '한 번 결제로 영구 사용',
                           isPopular: true,
                           badge: '인기',
@@ -5212,10 +5245,8 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                           context,
                           index: 1,
                           title: '연간',
-                          price: _packages != null && _packages!.isNotEmpty
-                              ? _packages![0].storeProduct.priceString
-                              : '₩15,000/년',
-                          subtitle: '월 ₩1,250 (43% 할인)',
+                          price: _yearlyPackage?.storeProduct.priceString ?? '₩15,000/년',
+                          subtitle: _getYearlySubtitle(),
                           isPopular: false,
                         ),
                         const SizedBox(height: 12),
@@ -5223,9 +5254,7 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                           context,
                           index: 2,
                           title: '월간',
-                          price: _packages != null && _packages!.length > 1
-                              ? _packages![1].storeProduct.priceString
-                              : '₩2,200/월',
+                          price: _monthlyPackage?.storeProduct.priceString ?? '₩2,200/월',
                           subtitle: '',
                           isPopular: false,
                         ),
