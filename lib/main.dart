@@ -482,7 +482,107 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
     }
 
     if (!_isLoaded || _nativeAd == null) {
-      return const SizedBox(height: 136);
+      // 스켈레톤 UI (실제 광고 레이아웃과 동일한 구조)
+      return Container(
+        height: 136,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white12),
+          color: const Color(0xFF1A1A1A),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              // 미디어 스켈레톤 (120x120)
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // 콘텐츠 영역
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 상단: 아이콘 + AD 배지
+                    Row(
+                      children: [
+                        // 아이콘 스켈레톤
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // AD 배지 (실제 광고와 동일한 위치)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFCC66),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                          child: const Text(
+                            'Ad',
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    // 헤드라인 스켈레톤
+                    Container(
+                      height: 14,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const Spacer(),
+                    // 하단: 바디 + CTA 버튼
+                    Row(
+                      children: [
+                        // 바디 스켈레톤
+                        Expanded(
+                          child: Container(
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // CTA 버튼 스켈레톤
+                        Container(
+                          width: 60,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return Container(
@@ -924,6 +1024,8 @@ class OnboardingPage {
 
 // ==================== Home Screen ====================
 
+// ==================== Main Screen with Bottom Navigation ====================
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -932,29 +1034,71 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final ImagePicker _picker = ImagePicker();
-  bool _isLoading = false;
-  List<String> _recentImages = [];
+  int _currentIndex = 0;
+
+  final List<Widget> _screens = [
+    const _HomeTab(),
+    const _RecentImagesTab(),
+    const SettingsScreen(),
+  ];
 
   @override
-  void initState() {
-    super.initState();
-    _loadRecentImages();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 0.5),
+          ),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (index) => setState(() => _currentIndex = index),
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          selectedItemColor: const Color(0xFF2196F3),
+          unselectedItemColor: Colors.grey,
+          selectedFontSize: 12,
+          unselectedFontSize: 12,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: '홈',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.history_outlined),
+              activeIcon: Icon(Icons.history),
+              label: '최근',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_outlined),
+              activeIcon: Icon(Icons.settings),
+              label: '설정',
+            ),
+          ],
+        ),
+      ),
+    );
   }
+}
 
-  Future<void> _loadRecentImages() async {
-    final images = await RecentImages.getRecentImages();
-    // 존재하는 파일만 필터링
-    final existingImages = <String>[];
-    for (final path in images) {
-      if (await File(path).exists()) {
-        existingImages.add(path);
-      }
-    }
-    if (mounted) {
-      setState(() => _recentImages = existingImages);
-    }
-  }
+// ==================== Home Tab ====================
+
+class _HomeTab extends StatefulWidget {
+  const _HomeTab();
+
+  @override
+  State<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<_HomeTab> {
+  final ImagePicker _picker = ImagePicker();
+  bool _isLoading = false;
 
   Future<void> _pickFromGallery() async {
     if (_isLoading) return;
@@ -1016,6 +1160,127 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.white70 : Colors.black54;
+
+    return SafeArea(
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
+                  Stack(
+                    alignment: Alignment.bottomCenter,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          height: 240,
+                        ),
+                      ),
+                      Text(
+                        'Cover',
+                        style: TextStyle(
+                          fontSize: 56,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 48),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton.icon(
+                      onPressed: _isLoading ? null : _pickFromGallery,
+                      icon: const Icon(Icons.photo_library_rounded),
+                      label: const Text('갤러리', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2196F3),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _pickFromCamera,
+                      icon: const Icon(Icons.camera_alt_rounded),
+                      label: const Text('카메라', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: textColor,
+                        side: BorderSide(color: subtitleColor),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                      ),
+                    ),
+                  ),
+                  // 네이티브 광고
+                  const SizedBox(height: 24),
+                  const NativeAdWidget(),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+          if (_isLoading)
+            Container(
+              color: Colors.black54,
+              child: const Center(child: CircularProgressIndicator(color: Color(0xFF2196F3))),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== Recent Images Tab ====================
+
+class _RecentImagesTab extends StatefulWidget {
+  const _RecentImagesTab();
+
+  @override
+  State<_RecentImagesTab> createState() => _RecentImagesTabState();
+}
+
+class _RecentImagesTabState extends State<_RecentImagesTab> {
+  List<String> _recentImages = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecentImages();
+  }
+
+  Future<void> _loadRecentImages() async {
+    setState(() => _isLoading = true);
+    final images = await RecentImages.getRecentImages();
+    // 존재하는 파일만 필터링
+    final existingImages = <String>[];
+    for (final path in images) {
+      if (await File(path).exists()) {
+        existingImages.add(path);
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _recentImages = existingImages;
+        _isLoading = false;
+      });
+    }
+  }
+
   void _openRecentImage(String path) async {
     final file = File(path);
     if (await file.exists()) {
@@ -1038,166 +1303,130 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _clearAllImages() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('최근 이미지 삭제', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          '모든 최근 이미지 기록을 삭제하시겠습니까?\n(원본 파일은 삭제되지 않습니다)',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('recent_images');
+      _loadRecentImages();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtitleColor = isDark ? Colors.white70 : Colors.black54;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 40),
-                    Stack(
-                      alignment: Alignment.bottomCenter,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 24),
-                          child: Image.asset(
-                            'assets/images/logo.png',
-                            height: 280,
-                          ),
-                        ),
-                        Text(
-                          'Cover',
-                          style: TextStyle(
-                            fontSize: 56,
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
-                          ),
-                        ),
-                      ],
+    return SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 헤더
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '최근 이미지',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                ),
+                if (_recentImages.isNotEmpty)
+                  TextButton(
+                    onPressed: _clearAllImages,
+                    child: Text(
+                      '모두 지우기',
+                      style: TextStyle(color: subtitleColor, fontSize: 14),
                     ),
-                    const SizedBox(height: 48),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _pickFromGallery,
-                        icon: const Icon(Icons.photo_library_rounded),
-                        label: const Text('갤러리', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2196F3),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: OutlinedButton.icon(
-                        onPressed: _isLoading ? null : _pickFromCamera,
-                        icon: const Icon(Icons.camera_alt_rounded),
-                        label: const Text('카메라', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: textColor,
-                          side: BorderSide(color: subtitleColor),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                        ),
-                      ),
-                    ),
-                    // 네이티브 광고
-                    const SizedBox(height: 24),
-                    const NativeAdWidget(),
+                  ),
+              ],
+            ),
+          ),
 
-                    // 최근 편집 이미지
-                    if (_recentImages.isNotEmpty) ...[
-                      const SizedBox(height: 48),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '최근 이미지',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: textColor,
+          // 이미지 그리드
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF2196F3)))
+                : _recentImages.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.photo_library_outlined, size: 64, color: subtitleColor),
+                            const SizedBox(height: 16),
+                            Text(
+                              '최근 편집한 이미지가 없습니다',
+                              style: TextStyle(color: subtitleColor, fontSize: 16),
                             ),
-                          ),
-                          TextButton(
-                            onPressed: () async {
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.remove('recent_images');
-                              _loadRecentImages();
-                            },
-                            child: Text(
-                              '모두 지우기',
-                              style: TextStyle(color: subtitleColor, fontSize: 14),
+                            const SizedBox(height: 8),
+                            Text(
+                              '홈에서 이미지를 선택해 편집을 시작하세요',
+                              style: TextStyle(color: subtitleColor.withValues(alpha: 0.6), fontSize: 14),
                             ),
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _loadRecentImages,
+                        color: const Color(0xFF2196F3),
+                        child: GridView.builder(
+                          padding: const EdgeInsets.all(16),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        height: 120,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
                           itemCount: _recentImages.length,
                           itemBuilder: (context, index) {
                             final path = _recentImages[index];
-                            return Padding(
-                              padding: EdgeInsets.only(
-                                right: index < _recentImages.length - 1 ? 12 : 0,
-                              ),
-                              child: GestureDetector(
-                                onTap: () => _openRecentImage(path),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: SizedBox(
-                                    width: 120,
-                                    height: 120,
-                                    child: Image.file(
-                                      File(path),
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Container(
-                                          color: Colors.grey[800],
-                                          child: const Icon(Icons.broken_image, color: Colors.white38),
-                                        );
-                                      },
-                                    ),
-                                  ),
+                            return GestureDetector(
+                              onTap: () => _openRecentImage(path),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(
+                                  File(path),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: Colors.grey[800],
+                                      child: const Icon(Icons.broken_image, color: Colors.white38),
+                                    );
+                                  },
                                 ),
                               ),
                             );
                           },
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 32),
-                  ],
-                ),
-              ),
-            ),
-            if (_isLoading)
-              Container(
-                color: Colors.black54,
-                child: const Center(child: CircularProgressIndicator(color: Color(0xFF2196F3))),
-              ),
-            // 설정 버튼 (Stack 위에 표시)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: IconButton(
-                icon: Icon(Icons.settings_outlined, color: subtitleColor),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1385,7 +1614,7 @@ class _EditorScreenState extends State<EditorScreen> {
   double _brushSize = 40.0;
   double _intensity = 0.5;
   bool _isProcessing = false;
-  Color _highlighterColor = Colors.yellow;
+  Color _highlighterColor = Colors.black;
 
   // 현재 스트로크
   List<Offset> _currentStroke = [];
@@ -1420,6 +1649,9 @@ class _EditorScreenState extends State<EditorScreen> {
   Color _currentTextColor = Colors.white;
   Color _currentTextBgColor = Colors.black;
   bool _textHasBackground = true;
+
+  // 도구 패널 표시 여부
+  bool _toolsVisible = true;
 
   @override
   void initState() {
@@ -1703,22 +1935,30 @@ class _EditorScreenState extends State<EditorScreen> {
   Offset? _canvasToImage(Offset canvasPoint, Size canvasSize) {
     if (_displayImage == null) return null;
 
+    // 1. 확대/이동 변환 역적용 (터치 좌표 → 원본 캔버스 좌표)
+    final transformedPoint = Offset(
+      (canvasPoint.dx - _offset.dx) / _scale,
+      (canvasPoint.dy - _offset.dy) / _scale,
+    );
+
     final imageSize = Size(_displayImage!.width.toDouble(), _displayImage!.height.toDouble());
     final fittedSize = applyBoxFit(BoxFit.contain, imageSize, canvasSize);
 
     final offsetX = (canvasSize.width - fittedSize.destination.width) / 2;
     final offsetY = (canvasSize.height - fittedSize.destination.height) / 2;
 
-    final relativeX = (canvasPoint.dx - offsetX) / fittedSize.destination.width;
-    final relativeY = (canvasPoint.dy - offsetY) / fittedSize.destination.height;
+    // 2. 변환된 좌표로 이미지 상대 좌표 계산
+    final relativeX = (transformedPoint.dx - offsetX) / fittedSize.destination.width;
+    final relativeY = (transformedPoint.dy - offsetY) / fittedSize.destination.height;
 
-    if (relativeX < 0 || relativeX > 1 || relativeY < 0 || relativeY > 1) {
+    // 확대 시 이미지 영역 밖도 허용 (경계 체크 완화)
+    if (relativeX < -0.1 || relativeX > 1.1 || relativeY < -0.1 || relativeY > 1.1) {
       return null;
     }
 
     return Offset(
-      relativeX * imageSize.width,
-      relativeY * imageSize.height,
+      (relativeX * imageSize.width).clamp(0, imageSize.width - 1),
+      (relativeY * imageSize.height).clamp(0, imageSize.height - 1),
     );
   }
 
@@ -1821,12 +2061,23 @@ class _EditorScreenState extends State<EditorScreen> {
                             },
                             onScaleUpdate: (details) {
                               if (details.pointerCount == 2) {
-                                // 핀치 줌
+                                // 두 손가락: 핀치 줌 + 팬
                                 setState(() {
-                                  _scale = (_previousScale * details.scale).clamp(0.5, 4.0);
-                                  _offset = details.localFocalPoint - (_previousOffset + details.localFocalPoint) * details.scale + _previousOffset;
+                                  final newScale = (_previousScale * details.scale).clamp(0.5, 4.0);
+                                  final focalPoint = details.localFocalPoint;
+
+                                  // 스케일 변화가 거의 없으면 팬만 적용
+                                  if ((details.scale - 1.0).abs() < 0.02) {
+                                    // 순수 팬 모드
+                                    _offset = _previousOffset + details.focalPointDelta;
+                                  } else {
+                                    // 핀치 줌 - 초점 기준 확대/축소
+                                    _offset = focalPoint - (focalPoint - _previousOffset) * (newScale / _previousScale);
+                                    _scale = newScale;
+                                  }
                                 });
                               } else if (details.pointerCount == 1) {
+                                // 한 손가락: 항상 그리기 (좌표 변환이 확대/이동 반영함)
                                 _onPanUpdate(DragUpdateDetails(
                                   localPosition: details.localFocalPoint,
                                   globalPosition: details.focalPoint,
@@ -1915,73 +2166,110 @@ class _EditorScreenState extends State<EditorScreen> {
           if (_isProcessing)
             const LinearProgressIndicator(color: Color(0xFF2196F3)),
 
-          // 하단 컨트롤 (고정 컴팩트 UI)
-          Container(
-            color: const Color(0xFF1A1A1A),
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 1. 도구 선택 - 그리드
-                    Column(
+          // 도구 패널 토글 버튼
+          GestureDetector(
+            onTap: () => setState(() => _toolsVisible = !_toolsVisible),
+            child: Container(
+              color: const Color(0xFF1A1A1A),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _toolsVisible ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+                        color: Colors.white70,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _toolsVisible ? '도구 숨기기' : '도구 보기',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // 하단 컨트롤 (고정 컴팩트 UI) - 애니메이션으로 숨기기/보이기
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            height: _toolsVisible ? null : 0,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: _toolsVisible ? 1.0 : 0.0,
+              child: _toolsVisible ? Container(
+                color: const Color(0xFF1A1A1A),
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        // 1행: 블러, 모자이크, 검은바, 형광펜
-                        Row(
+                        // 1. 도구 선택 - 그리드
+                        Column(
                           children: [
-                            Expanded(child: _buildGridToolChip(EditTool.blur, Icons.blur_on, '블러')),
-                            const SizedBox(width: 6),
-                            Expanded(child: _buildGridToolChip(EditTool.mosaic, Icons.grid_view, '모자이크')),
-                            const SizedBox(width: 6),
-                            Expanded(child: _buildGridToolChip(EditTool.blackBar, Icons.rectangle, '검은바')),
-                            const SizedBox(width: 6),
-                            Expanded(child: _buildGridToolChip(EditTool.highlighter, Icons.highlight, '형광펜')),
+                            // 1행: 블러, 모자이크, 채우기
+                            Row(
+                              children: [
+                                Expanded(child: _buildGridToolChip(EditTool.blur, Icons.blur_on, '블러')),
+                                const SizedBox(width: 6),
+                                Expanded(child: _buildGridToolChip(EditTool.mosaic, Icons.grid_view, '모자이크')),
+                                const SizedBox(width: 6),
+                                Expanded(child: _buildGridToolChip(EditTool.highlighter, Icons.format_color_fill, '채우기')),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // 2행: 지우개, 스티커, 텍스트
+                            Row(
+                              children: [
+                                Expanded(child: _buildGridToolChip(EditTool.eraser, Icons.auto_fix_high, '지우개')),
+                                const SizedBox(width: 6),
+                                Expanded(child: _buildGridToolChip(EditTool.sticker, Icons.emoji_emotions, '스티커')),
+                                const SizedBox(width: 6),
+                                Expanded(child: _buildGridToolChip(EditTool.text, Icons.text_fields, '텍스트')),
+                              ],
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        // 2행: 지우개, 스티커, 텍스트
-                        Row(
-                          children: [
-                            Expanded(child: _buildGridToolChip(EditTool.eraser, Icons.auto_fix_high, '지우개')),
-                            const SizedBox(width: 6),
-                            Expanded(child: _buildGridToolChip(EditTool.sticker, Icons.emoji_emotions, '스티커')),
-                            const SizedBox(width: 6),
-                            Expanded(child: _buildGridToolChip(EditTool.text, Icons.text_fields, '텍스트')),
-                            const SizedBox(width: 6),
-                            // 빈 공간
-                            const Expanded(child: SizedBox()),
-                          ],
-                        ),
-                      ],
-                    ),
 
-                    const SizedBox(height: 10),
+                        const SizedBox(height: 10),
 
-                    // 2. 옵션 영역 - 고정 높이로 레이아웃 유지
-                    SizedBox(
-                      height: 130,
-                      child: _currentTool == EditTool.sticker
-                          ? _buildStickerControls()
-                          : _currentTool == EditTool.text
-                              ? _buildTextControls()
-                              : Column(
+                        // 2. 옵션 영역 - 고정 높이로 레이아웃 유지
+                        SizedBox(
+                          height: 130,
+                          child: _currentTool == EditTool.sticker
+                              ? _buildStickerControls()
+                              : _currentTool == EditTool.text
+                                  ? _buildTextControls()
+                                  : Column(
                               children: [
                                 // 모드 선택
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisAlignment: MainAxisAlignment.start,
                                   children: [
                                     const Text('모드 ', style: TextStyle(color: Colors.white54, fontSize: 11)),
                                     const SizedBox(width: 8),
                                     _buildCompactModeChip(DrawMode.brush, Icons.brush),
                                     _buildCompactModeChip(DrawMode.rectangle, Icons.crop_square),
                                     _buildCompactModeChip(DrawMode.circle, Icons.circle_outlined),
-                                    // 색상 선택 (형광펜일 때만)
+                                    // 색상 선택 (채우기일 때만)
                                     if (_currentTool == EditTool.highlighter) ...[
                                       const SizedBox(width: 12),
                                       Container(width: 1, height: 24, color: Colors.white24),
                                       const SizedBox(width: 12),
+                                      _buildColorChip(Colors.black, '검정'),
+                                      const SizedBox(width: 4),
                                       _buildColorChip(Colors.yellow, '노랑'),
                                       const SizedBox(width: 4),
                                       _buildColorChip(Colors.greenAccent, '초록'),
@@ -1989,8 +2277,6 @@ class _EditorScreenState extends State<EditorScreen> {
                                       _buildColorChip(Colors.pinkAccent, '분홍'),
                                       const SizedBox(width: 4),
                                       _buildColorChip(Colors.cyanAccent, '하늘'),
-                                      const SizedBox(width: 4),
-                                      _buildColorChip(Colors.orangeAccent, '주황'),
                                     ],
                                   ],
                                 ),
@@ -2014,48 +2300,58 @@ class _EditorScreenState extends State<EditorScreen> {
                                   max: 1.0,
                                   displayValue: '${(_intensity * 100).toInt()}%',
                                   onChanged: (v) => setState(() => _intensity = v),
-                                  enabled: _currentTool != EditTool.eraser && _currentTool != EditTool.blackBar,
+                                  enabled: _currentTool != EditTool.eraser,
                                 ),
                               ],
                             ),
                     ),
 
-                    const SizedBox(height: 12),
-
-                    // 3. 저장/공유 버튼
-                    SizedBox(
-                      height: 44,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _isProcessing ? null : _showSaveOptionsDialog,
-                              icon: const Icon(Icons.save_alt, size: 18),
-                              label: const Text('저장', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF2196F3),
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _isProcessing ? null : _shareImage,
-                              icon: const Icon(Icons.share, size: 18),
-                              label: const Text('공유', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: const BorderSide(color: Colors.white38),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
+                ),
+              ),
+            ),
+          ) : const SizedBox.shrink(),
+            ),
+          ),
+
+          // 3. 저장/공유 버튼 (항상 표시)
+          Container(
+            color: const Color(0xFF1A1A1A),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: SizedBox(
+                  height: 44,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _isProcessing ? null : _showSaveOptionsDialog,
+                          icon: const Icon(Icons.save_alt, size: 18),
+                          label: const Text('저장', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2196F3),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isProcessing ? null : _shareImage,
+                          icon: const Icon(Icons.share, size: 18),
+                          label: const Text('공유', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white38),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -4017,7 +4313,8 @@ void _applyBlackBar(img.Image image, List<Offset> points, int radius) {
 // 형광펜 적용 (브러시 모드)
 void _applyHighlighter(img.Image image, List<Offset> points, int radius, int colorValue, double intensity) {
   final color = Color(colorValue);
-  final alpha = (intensity * 0.5).clamp(0.2, 0.6);
+  // intensity 0.1~1.0 → alpha 0.1~1.0 (100% 불투명도 지원)
+  final alpha = intensity.clamp(0.1, 1.0);
   final colorR = (color.r * 255).round().clamp(0, 255);
   final colorG = (color.g * 255).round().clamp(0, 255);
   final colorB = (color.b * 255).round().clamp(0, 255);
@@ -4163,7 +4460,8 @@ void _applyShapeBlackBar(img.Image image, Offset start, Offset end, DrawMode mod
 
 void _applyShapeHighlighter(img.Image image, Offset start, Offset end, DrawMode mode, int colorValue, double intensity) {
   final color = Color(colorValue);
-  final alpha = (intensity * 0.5).clamp(0.2, 0.6);
+  // intensity 0.1~1.0 → alpha 0.1~1.0 (100% 불투명도 지원)
+  final alpha = intensity.clamp(0.1, 1.0);
   final colorR = (color.r * 255).round().clamp(0, 255);
   final colorG = (color.g * 255).round().clamp(0, 255);
   final colorB = (color.b * 255).round().clamp(0, 255);
@@ -4828,7 +5126,11 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
+    final maxHeight = MediaQuery.of(context).size.height * 0.9;
+
     return Container(
+      constraints: BoxConstraints(maxHeight: maxHeight),
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -4836,6 +5138,7 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 드래그 핸들 (고정)
           const SizedBox(height: 12),
           Container(
             width: 40,
@@ -4845,135 +5148,147 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(height: 24),
-
-          // 헤더
-          const Icon(Icons.workspace_premium, size: 48, color: Color(0xFF6366F1)),
           const SizedBox(height: 12),
-          const Text(
-            'Cover Pro',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '모든 프리미엄 기능을 무제한으로 사용하세요',
-            style: TextStyle(color: Colors.grey[600], fontSize: 14),
-          ),
 
-          const SizedBox(height: 24),
+          // 스크롤 가능한 콘텐츠
+          Flexible(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: bottomPadding + 16),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
 
-          // 기능 목록
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              children: [
-                _buildFeatureRow(Icons.high_quality, '원본 화질 저장'),
-                _buildFeatureRow(Icons.all_inclusive, '무제한 저장'),
-                _buildFeatureRow(Icons.branding_watermark, '워터마크 기능'),
-                _buildFeatureRow(Icons.emoji_emotions, '50+ 프리미엄 스티커'),
-                _buildFeatureRow(Icons.block, '광고 제거'),
-                _buildFeatureRow(Icons.support_agent, '우선 고객 지원'),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // 가격 옵션
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              children: [
-                _buildPriceOption(
-                  context,
-                  index: 0,
-                  title: '평생 이용권',
-                  price: _packages != null && _packages!.length > 2
-                      ? _packages![2].storeProduct.priceString
-                      : '₩22,000',
-                  subtitle: '한 번 결제로 영구 사용',
-                  isPopular: true,
-                  badge: '인기',
-                  isLifetime: true,
-                ),
-                const SizedBox(height: 12),
-                _buildPriceOption(
-                  context,
-                  index: 1,
-                  title: '연간',
-                  price: _packages != null && _packages!.isNotEmpty
-                      ? _packages![0].storeProduct.priceString
-                      : '₩15,000/년',
-                  subtitle: '월 ₩1,250 (43% 할인)',
-                  isPopular: false,
-                ),
-                const SizedBox(height: 12),
-                _buildPriceOption(
-                  context,
-                  index: 2,
-                  title: '월간',
-                  price: _packages != null && _packages!.length > 1
-                      ? _packages![1].storeProduct.priceString
-                      : '₩2,200/월',
-                  subtitle: '',
-                  isPopular: false,
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // 구독 버튼
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _purchase,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  // 헤더
+                  const Icon(Icons.workspace_premium, size: 48, color: Color(0xFF6366F1)),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Cover Pro',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
+                  const SizedBox(height: 8),
+                  Text(
+                    '모든 프리미엄 기능을 무제한으로 사용하세요',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // 기능 목록
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        _buildFeatureRow(Icons.high_quality, '원본 화질 저장'),
+                        _buildFeatureRow(Icons.all_inclusive, '무제한 저장'),
+                        _buildFeatureRow(Icons.branding_watermark, '워터마크 기능'),
+                        _buildFeatureRow(Icons.emoji_emotions, '50+ 프리미엄 스티커'),
+                        _buildFeatureRow(Icons.block, '광고 제거'),
+                        _buildFeatureRow(Icons.support_agent, '우선 고객 지원'),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // 가격 옵션
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        _buildPriceOption(
+                          context,
+                          index: 0,
+                          title: '평생 이용권',
+                          price: _packages != null && _packages!.length > 2
+                              ? _packages![2].storeProduct.priceString
+                              : '₩22,000',
+                          subtitle: '한 번 결제로 영구 사용',
+                          isPopular: true,
+                          badge: '인기',
+                          isLifetime: true,
                         ),
-                      )
-                    : Text(
-                        _selectedPlanIndex == 0 ? '평생 이용권 구매하기' : '구독 시작하기',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        const SizedBox(height: 12),
+                        _buildPriceOption(
+                          context,
+                          index: 1,
+                          title: '연간',
+                          price: _packages != null && _packages!.isNotEmpty
+                              ? _packages![0].storeProduct.priceString
+                              : '₩15,000/년',
+                          subtitle: '월 ₩1,250 (43% 할인)',
+                          isPopular: false,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildPriceOption(
+                          context,
+                          index: 2,
+                          title: '월간',
+                          price: _packages != null && _packages!.length > 1
+                              ? _packages![1].storeProduct.priceString
+                              : '₩2,200/월',
+                          subtitle: '',
+                          isPopular: false,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // 구독 버튼
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _purchase,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6366F1),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                _selectedPlanIndex == 0 ? '평생 이용권 구매하기' : '구독 시작하기',
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                              ),
                       ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 하단 안내
+                  Text(
+                    _selectedPlanIndex == 0
+                        ? '한 번 결제로 모든 기능을 영구적으로 사용하세요'
+                        : '구독 시작 시 즉시 결제됩니다',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                  TextButton(
+                    onPressed: _isLoading ? null : _restorePurchases,
+                    child: Text(
+                      '이전 구매 복원',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+                ],
               ),
             ),
           ),
-
-          const SizedBox(height: 12),
-
-          // 하단 안내
-          Text(
-            _selectedPlanIndex == 0
-                ? '한 번 결제로 모든 기능을 영구적으로 사용하세요'
-                : '구독 시작 시 즉시 결제됩니다',
-            style: TextStyle(color: Colors.grey[500], fontSize: 12),
-          ),
-          TextButton(
-            onPressed: _isLoading ? null : _restorePurchases,
-            child: Text(
-              '이전 구매 복원',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
-            ),
-          ),
-
-          const SizedBox(height: 16),
         ],
       ),
     );
