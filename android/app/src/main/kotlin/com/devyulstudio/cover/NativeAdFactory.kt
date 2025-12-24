@@ -1,4 +1,4 @@
-package com.cover.cover
+package com.devyulstudio.cover
 
 import android.content.Context
 import android.content.res.Configuration

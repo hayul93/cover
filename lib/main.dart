@@ -124,9 +124,9 @@ class SubscriptionService {
   factory SubscriptionService() => _instance;
   SubscriptionService._internal();
 
-  // RevenueCat API 키 (실제 키로 교체 필요)
-  static const String _apiKeyIOS = 'appl_YOUR_IOS_API_KEY';
-  static const String _apiKeyAndroid = 'goog_YOUR_ANDROID_API_KEY';
+  // RevenueCat API 키
+  static const String _apiKeyIOS = 'appl_RTTbxEwnpxhUZNsrKdmimCGYjdy';
+  static const String _apiKeyAndroid = 'goog_EwguVFnVbUlHDvtNRKoQVjXhlFW';
 
   // 상품 ID
   static const String entitlementId = 'pro';
@@ -140,7 +140,7 @@ class SubscriptionService {
   bool _isConfigured = false;
 
   // 테스트 모드 (개발 중 Pro 기능 테스트용)
-  static const bool _testModeEnabled = true; // 출시 전 false로 변경
+  static const bool _testModeEnabled = false; // 출시 모드
   bool _isTestPro = false; // 테스트 모드에서 Pro 상태 (false = 무료 사용자)
 
   // 초기화
@@ -157,6 +157,16 @@ class SubscriptionService {
 
       await Purchases.configure(PurchasesConfiguration(apiKey));
       _isConfigured = true;
+
+      // Firebase App Instance ID를 RevenueCat에 연결 (구매 기록 추적용)
+      try {
+        final appInstanceId = await FirebaseAnalytics.instance.appInstanceId;
+        if (appInstanceId != null) {
+          await Purchases.setFirebaseAppInstanceId(appInstanceId);
+        }
+      } catch (e) {
+        debugPrint('Firebase App Instance ID 설정 오류: $e');
+      }
 
       // 구독 상태 확인
       await _refreshPurchaseStatus();
@@ -208,6 +218,22 @@ class SubscriptionService {
       final result = await Purchases.purchasePackage(package);
       _customerInfo = result;
       _updateProStatus();
+
+      // Firebase Analytics에 구매 이벤트 기록
+      if (isPro.value) {
+        await FirebaseAnalytics.instance.logPurchase(
+          currency: 'KRW',
+          value: package.storeProduct.price,
+          items: [
+            AnalyticsEventItem(
+              itemId: package.storeProduct.identifier,
+              itemName: package.storeProduct.title,
+              price: package.storeProduct.price,
+            ),
+          ],
+        );
+      }
+
       return isPro.value;
     } catch (e) {
       if (e is PurchasesErrorCode) {
@@ -314,13 +340,18 @@ class AdService {
   factory AdService() => _instance;
   AdService._internal();
 
-  // 테스트 광고 ID (실제 배포 시 변경 필요)
+  // 전면 광고 ID (디버그: 테스트 ID, 릴리즈: 실제 ID)
   static String get interstitialAdUnitId {
-    if (Platform.isIOS) {
-      return 'ca-app-pub-3940256099942544/4411468910'; // iOS 테스트 전면
-    } else {
-      return 'ca-app-pub-3940256099942544/1033173712'; // Android 테스트 전면
+    if (kDebugMode) {
+      // 테스트 광고 ID
+      return Platform.isIOS
+          ? 'ca-app-pub-3940256099942544/4411468910'
+          : 'ca-app-pub-3940256099942544/1033173712';
     }
+    // 실제 광고 ID
+    return Platform.isIOS
+        ? 'ca-app-pub-3438920793636799/2729421253'
+        : 'ca-app-pub-3438920793636799/8197370353';
   }
 
   InterstitialAd? _interstitialAd;
@@ -398,13 +429,18 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
   NativeAd? _nativeAd;
   bool _isLoaded = false;
 
-  // 테스트 네이티브 광고 ID
+  // 네이티브 광고 ID (디버그: 테스트 ID, 릴리즈: 실제 ID)
   static String get nativeAdUnitId {
-    if (Platform.isIOS) {
-      return 'ca-app-pub-3940256099942544/3986624511'; // iOS 테스트 네이티브
-    } else {
-      return 'ca-app-pub-3940256099942544/2247696110'; // Android 테스트 네이티브
+    if (kDebugMode) {
+      // 테스트 광고 ID
+      return Platform.isIOS
+          ? 'ca-app-pub-3940256099942544/3986624511'
+          : 'ca-app-pub-3940256099942544/2247696110';
     }
+    // 실제 광고 ID
+    return Platform.isIOS
+        ? 'ca-app-pub-3438920793636799/1091431175'
+        : 'ca-app-pub-3438920793636799/3384027376';
   }
 
   @override
@@ -4643,12 +4679,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _SettingsTile(
             icon: Icons.privacy_tip_outlined,
             title: '개인정보 처리방침',
-            onTap: () => _openUrl('https://cover.app/privacy'),
+            onTap: () => _openUrl('https://devyulstudio.notion.site/cover-privacy-policy'),
           ),
           _SettingsTile(
             icon: Icons.article_outlined,
             title: '이용약관',
-            onTap: () => _openUrl('https://cover.app/terms'),
+            onTap: () => _openUrl('https://devyulstudio.notion.site/cover-terms-of-service'),
           ),
 
           const SizedBox(height: 32),
@@ -4696,7 +4732,7 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
   final SubscriptionService _subscriptionService = SubscriptionService();
   List<Package>? _packages;
   bool _isLoading = false;
-  int _selectedPlanIndex = 0; // 0: 연간, 1: 월간, 2: 평생
+  int _selectedPlanIndex = 0; // 0: 평생, 1: 연간, 2: 월간
 
   @override
   void initState() {
@@ -4724,7 +4760,7 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
         final success = await _subscriptionService.purchasePackage(package);
 
         if (success) {
-          final plan = _selectedPlanIndex == 0 ? 'yearly' : (_selectedPlanIndex == 1 ? 'monthly' : 'lifetime');
+          final plan = _selectedPlanIndex == 0 ? 'lifetime' : (_selectedPlanIndex == 1 ? 'yearly' : 'monthly');
           AnalyticsService().logSubscriptionStarted(plan);
         }
 
@@ -4851,37 +4887,36 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                 _buildPriceOption(
                   context,
                   index: 0,
-                  title: '연간',
-                  price: _packages != null && _packages!.isNotEmpty
-                      ? _packages![0].storeProduct.priceString
-                      : '₩12,900/년',
-                  subtitle: '월 ₩1,075 (55% 할인)',
+                  title: '평생 이용권',
+                  price: _packages != null && _packages!.length > 2
+                      ? _packages![2].storeProduct.priceString
+                      : '₩22,000',
+                  subtitle: '한 번 결제로 영구 사용',
                   isPopular: true,
                   badge: '인기',
+                  isLifetime: true,
                 ),
                 const SizedBox(height: 12),
                 _buildPriceOption(
                   context,
                   index: 1,
-                  title: '월간',
-                  price: _packages != null && _packages!.length > 1
-                      ? _packages![1].storeProduct.priceString
-                      : '₩1,900/월',
-                  subtitle: '',
+                  title: '연간',
+                  price: _packages != null && _packages!.isNotEmpty
+                      ? _packages![0].storeProduct.priceString
+                      : '₩15,000/년',
+                  subtitle: '월 ₩1,250 (43% 할인)',
                   isPopular: false,
                 ),
                 const SizedBox(height: 12),
                 _buildPriceOption(
                   context,
                   index: 2,
-                  title: '평생 이용권',
-                  price: _packages != null && _packages!.length > 2
-                      ? _packages![2].storeProduct.priceString
-                      : '₩24,900',
-                  subtitle: '한 번 결제로 영구 사용',
+                  title: '월간',
+                  price: _packages != null && _packages!.length > 1
+                      ? _packages![1].storeProduct.priceString
+                      : '₩2,200/월',
+                  subtitle: '',
                   isPopular: false,
-                  badge: '추천',
-                  isLifetime: true,
                 ),
               ],
             ),
@@ -4914,7 +4949,7 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                         ),
                       )
                     : Text(
-                        _selectedPlanIndex == 2 ? '평생 이용권 구매하기' : '무료 체험 시작하기',
+                        _selectedPlanIndex == 0 ? '평생 이용권 구매하기' : '구독 시작하기',
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
               ),
@@ -4925,9 +4960,9 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
 
           // 하단 안내
           Text(
-            _selectedPlanIndex == 2
+            _selectedPlanIndex == 0
                 ? '한 번 결제로 모든 기능을 영구적으로 사용하세요'
-                : '7일 무료 체험 후 결제가 시작됩니다',
+                : '구독 시작 시 즉시 결제됩니다',
             style: TextStyle(color: Colors.grey[500], fontSize: 12),
           ),
           TextButton(

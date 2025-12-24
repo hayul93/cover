@@ -18,6 +18,7 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		AABB11001ED2DC5600515810 /* ListTileNativeAdFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB11011ED2DC5600515810 /* ListTileNativeAdFactory.swift */; };
 		AABB11021ED2DC5600515810 /* ListTileNativeAdView.xib in Resources */ = {isa = PBXBuildFile; fileRef = AABB11031ED2DC5600515810 /* ListTileNativeAdView.xib */; };
+		CCDD22001ED2DC5600515810 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = CCDD22011ED2DC5600515810 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +60,7 @@
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
 		AABB11011ED2DC5600515810 /* ListTileNativeAdFactory.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ListTileNativeAdFactory.swift; sourceTree = "<group>"; };
 		AABB11031ED2DC5600515810 /* ListTileNativeAdView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = ListTileNativeAdView.xib; sourceTree = "<group>"; };
+		CCDD22011ED2DC5600515810 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -167,6 +169,7 @@
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				AABB11011ED2DC5600515810 /* ListTileNativeAdFactory.swift */,
 				AABB11031ED2DC5600515810 /* ListTileNativeAdView.xib */,
+				CCDD22011ED2DC5600515810 /* GoogleService-Info.plist */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -272,6 +275,7 @@
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
 				AABB11021ED2DC5600515810 /* ListTileNativeAdView.xib in Resources */,
+				CCDD22001ED2DC5600515810 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
