@@ -772,37 +772,9 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // 네이티브 스플래시와 동일하게 검은 화면만 표시 (온보딩 체크 중)
+    return const Scaffold(
       backgroundColor: Colors.black,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2196F3),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Icon(
-                Icons.shield,
-                size: 60,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Cover',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -4832,10 +4804,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('설정'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: false,
       ),
       body: ListView(
         children: [
@@ -5059,13 +5028,40 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
 
   // 연간 구독 할인율 계산
   String _getYearlySubtitle() {
-    final yearly = _yearlyPackage?.storeProduct.price ?? 15000;
-    final monthly = _monthlyPackage?.storeProduct.price ?? 2200;
+    final yearlyProduct = _yearlyPackage?.storeProduct;
+    final monthlyProduct = _monthlyPackage?.storeProduct;
+
+    // 패키지가 없으면 기본 텍스트 반환
+    if (yearlyProduct == null || monthlyProduct == null) {
+      return '월 ₩1,250 (43% 할인)';
+    }
+
+    final yearly = yearlyProduct.price;
+    final monthly = monthlyProduct.price;
+
+    if (monthly <= 0) return '';
 
     final yearlyMonthly = yearly / 12;
     final discount = ((monthly - yearlyMonthly) / monthly * 100).round();
 
-    return '월 ₩${yearlyMonthly.round().toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} ($discount% 할인)';
+    // 통화 코드에 따라 포맷팅
+    final currencyCode = yearlyProduct.currencyCode;
+    String formattedMonthly;
+
+    if (currencyCode == 'KRW' || currencyCode == 'JPY') {
+      // 소수점 없는 통화
+      formattedMonthly = yearlyMonthly.round().toString().replaceAllMapped(
+        RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+    } else {
+      // 소수점 있는 통화 (USD, EUR 등)
+      formattedMonthly = yearlyMonthly.toStringAsFixed(2);
+    }
+
+    // 통화 기호 가져오기 (priceString에서 추출)
+    final priceString = yearlyProduct.priceString;
+    final currencySymbol = priceString.replaceAll(RegExp(r'[\d,.\s]'), '').trim();
+
+    return '월 $currencySymbol$formattedMonthly ($discount% 할인)';
   }
 
   @override
