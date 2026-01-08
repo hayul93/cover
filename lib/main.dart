@@ -27,7 +27,7 @@ import 'l10n/app_localizations.dart';
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 
 // 언어 설정 관리
-final ValueNotifier<Locale?> localeNotifier = ValueNotifier(null);
+final ValueNotifier<Locale?> localeNotifier = ValueNotifier(null); // null = 기기 설정 따름
 
 // ==================== Analytics 서비스 ====================
 
@@ -503,9 +503,9 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
                             color: AppColors.proBadge,
                             borderRadius: BorderRadius.circular(2),
                           ),
-                          child: const Text(
-                            'Ad',
-                            style: TextStyle(
+                          child: Text(
+                            AppLocalizations.of(context).nativeAdLabel,
+                            style: const TextStyle(
                               color: Colors.black,
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
@@ -694,29 +694,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<OnboardingPage> _pages = [
+  List<OnboardingPage> _getPages(AppLocalizations l10n) => [
     OnboardingPage(
       icon: Icons.shield,
-      title: '개인정보를 안전하게',
-      description: '사진 속 민감한 정보를\n3초 만에 블러 처리하세요',
+      title: l10n.onboardingWelcomeTitle,
+      description: l10n.onboardingWelcomeDesc,
       color: AppColors.primary,
     ),
     OnboardingPage(
       icon: Icons.blur_on,
-      title: '다양한 편집 도구',
-      description: '블러, 모자이크, 검정 바,\n하이라이터 등 다양한 도구 제공',
+      title: l10n.onboardingBlurTitle,
+      description: l10n.onboardingBlurDesc,
       color: const Color(0xFF9C27B0),
     ),
     OnboardingPage(
       icon: Icons.text_fields,
-      title: '텍스트 & 스티커',
-      description: '텍스트와 스티커로\n더 창의적인 편집이 가능해요',
+      title: l10n.onboardingTextStickerTitle,
+      description: l10n.onboardingTextStickerDesc,
       color: const Color(0xFF4CAF50),
     ),
     OnboardingPage(
       icon: Icons.share,
-      title: '저장 & 공유',
-      description: '편집한 이미지를 갤러리에 저장하고\n바로 공유하세요',
+      title: l10n.onboardingSaveShareTitle,
+      description: l10n.onboardingSaveShareDesc,
       color: const Color(0xFFFF9800),
     ),
   ];
@@ -739,8 +739,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  void _nextPage() {
-    if (_currentPage < _pages.length - 1) {
+  void _nextPage(int pageCount) {
+    if (_currentPage < pageCount - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -752,6 +752,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final pages = _getPages(l10n);
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -763,7 +766,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: TextButton(
                 onPressed: _completeOnboarding,
                 child: Text(
-                  '건너뛰기',
+                  l10n.skip,
                   style: TextStyle(
                     color: Colors.grey[400],
                     fontSize: 16,
@@ -775,12 +778,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
-                itemCount: _pages.length,
+                itemCount: pages.length,
                 onPageChanged: (index) {
                   setState(() => _currentPage = index);
                 },
                 itemBuilder: (context, index) {
-                  return _buildPage(_pages[index]);
+                  return _buildPage(pages[index]);
                 },
               ),
             ),
@@ -790,7 +793,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(
-                  _pages.length,
+                  pages.length,
                   (index) => AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -798,7 +801,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     height: 8,
                     decoration: BoxDecoration(
                       color: _currentPage == index
-                          ? _pages[_currentPage].color
+                          ? pages[_currentPage].color
                           : Colors.grey[700],
                       borderRadius: BorderRadius.circular(4),
                     ),
@@ -813,16 +816,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _nextPage,
+                  onPressed: () => _nextPage(pages.length),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _pages[_currentPage].color,
+                    backgroundColor: pages[_currentPage].color,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                   child: Text(
-                    _currentPage == _pages.length - 1 ? '시작하기' : '다음',
+                    _currentPage == pages.length - 1 ? l10n.getStarted : l10n.next,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -1376,8 +1379,9 @@ class _EditorScreenState extends State<EditorScreen> {
       _originalDisplayImage = frame.image;
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('이미지 로드 실패: $e')),
+          SnackBar(content: Text('${l10n.imageLoadFailed}: $e')),
         );
       }
     } finally {
@@ -1478,8 +1482,9 @@ class _EditorScreenState extends State<EditorScreen> {
       await _updateDisplayImage(processedBytes);
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('처리 실패: $e')),
+          SnackBar(content: Text('${l10n.processingFailed}: $e')),
         );
       }
     } finally {
@@ -1515,8 +1520,9 @@ class _EditorScreenState extends State<EditorScreen> {
       setState(() => _rotation = (_rotation + 90) % 360);
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('회전 실패: $e')),
+          SnackBar(content: Text('${l10n.rotateFailed}: $e')),
         );
       }
     } finally {
@@ -1534,6 +1540,7 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _cropImage() async {
     if (_currentBytes == null || _isProcessing) return;
 
+    final l10n = AppLocalizations.of(context);
     setState(() => _isProcessing = true);
 
     try {
@@ -1547,7 +1554,7 @@ class _EditorScreenState extends State<EditorScreen> {
         sourcePath: tempFile.path,
         uiSettings: [
           AndroidUiSettings(
-            toolbarTitle: '이미지 자르기',
+            toolbarTitle: l10n.cropImage,
             toolbarColor: Colors.black,
             toolbarWidgetColor: Colors.white,
             backgroundColor: Colors.black,
@@ -1563,8 +1570,8 @@ class _EditorScreenState extends State<EditorScreen> {
             ],
           ),
           IOSUiSettings(
-            cancelButtonTitle: '취소',
-            doneButtonTitle: '완료',
+            cancelButtonTitle: l10n.cancel,
+            doneButtonTitle: l10n.done,
             aspectRatioPresets: [
               CropAspectRatioPreset.original,
               CropAspectRatioPreset.square,
@@ -1608,9 +1615,9 @@ class _EditorScreenState extends State<EditorScreen> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('이미지가 잘렸습니다'),
-              duration: Duration(seconds: 1),
+            SnackBar(
+              content: Text(l10n.imageCropped),
+              duration: const Duration(seconds: 1),
             ),
           );
         }
@@ -1618,7 +1625,7 @@ class _EditorScreenState extends State<EditorScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('자르기 실패: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('${l10n.cropFailed}: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1692,37 +1699,62 @@ class _EditorScreenState extends State<EditorScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('편집', style: TextStyle(color: Colors.white)),
+        title: Builder(
+          builder: (context) {
+            final l10n = AppLocalizations.of(context);
+            return Text(l10n.edit, style: const TextStyle(color: Colors.white));
+          },
+        ),
         actions: [
           // 자르기 버튼
-          IconButton(
-            icon: const Icon(Icons.crop, color: Colors.white),
-            onPressed: _cropImage,
-            tooltip: '자르기',
+          Builder(
+            builder: (context) {
+              final l10n = AppLocalizations.of(context);
+              return IconButton(
+                icon: const Icon(Icons.crop, color: Colors.white),
+                onPressed: _cropImage,
+                tooltip: l10n.crop,
+              );
+            },
           ),
           // 회전 버튼
-          IconButton(
-            icon: const Icon(Icons.rotate_right, color: Colors.white),
-            onPressed: _rotateImage,
-            tooltip: '회전',
+          Builder(
+            builder: (context) {
+              final l10n = AppLocalizations.of(context);
+              return IconButton(
+                icon: const Icon(Icons.rotate_right, color: Colors.white),
+                onPressed: _rotateImage,
+                tooltip: l10n.rotate,
+              );
+            },
           ),
           // 비교 모드 버튼
-          IconButton(
-            icon: Icon(
-              Icons.compare,
-              color: _compareMode ? AppColors.primary : Colors.white,
-            ),
-            onPressed: () {
-              setState(() => _compareMode = !_compareMode);
+          Builder(
+            builder: (context) {
+              final l10n = AppLocalizations.of(context);
+              return IconButton(
+                icon: Icon(
+                  Icons.compare,
+                  color: _compareMode ? AppColors.primary : Colors.white,
+                ),
+                onPressed: () {
+                  setState(() => _compareMode = !_compareMode);
+                },
+                tooltip: l10n.compareOriginal,
+              );
             },
-            tooltip: '원본 비교',
           ),
           // 줌 리셋
           if (_scale != 1.0)
-            IconButton(
-              icon: const Icon(Icons.fit_screen, color: Colors.white),
-              onPressed: _resetZoom,
-              tooltip: '원래 크기',
+            Builder(
+              builder: (context) {
+                final l10n = AppLocalizations.of(context);
+                return IconButton(
+                  icon: const Icon(Icons.fit_screen, color: Colors.white),
+                  onPressed: _resetZoom,
+                  tooltip: l10n.originalSize,
+                );
+              },
             ),
           IconButton(
             icon: Icon(Icons.undo, color: _undoStack.isNotEmpty ? Colors.white : Colors.white38),
@@ -1835,12 +1867,12 @@ class _EditorScreenState extends State<EditorScreen> {
                                     color: Colors.black.withValues(alpha: 0.7),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.visibility, color: Colors.white, size: 18),
-                                      SizedBox(width: 8),
-                                      Text('원본', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+                                      const Icon(Icons.visibility, color: Colors.white, size: 18),
+                                      const SizedBox(width: 8),
+                                      Text(AppLocalizations.of(context).original, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
                                     ],
                                   ),
                                 ),
@@ -1880,20 +1912,25 @@ class _EditorScreenState extends State<EditorScreen> {
                     color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _toolsVisible ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
-                        color: Colors.white70,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _toolsVisible ? '도구 숨기기' : '도구 보기',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                    ],
+                  child: Builder(
+                    builder: (context) {
+                      final l10n = AppLocalizations.of(context);
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _toolsVisible ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+                            color: Colors.white70,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _toolsVisible ? l10n.hideTools : l10n.showTools,
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -1918,30 +1955,35 @@ class _EditorScreenState extends State<EditorScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         // 1. 도구 선택 - 그리드
-                        Column(
-                          children: [
-                            // 1행: 블러, 모자이크, 채우기
-                            Row(
+                        Builder(
+                          builder: (context) {
+                            final l10n = AppLocalizations.of(context);
+                            return Column(
                               children: [
-                                Expanded(child: _buildGridToolChip(EditTool.blur, Icons.blur_on, '블러')),
-                                const SizedBox(width: 6),
-                                Expanded(child: _buildGridToolChip(EditTool.mosaic, Icons.grid_view, '모자이크')),
-                                const SizedBox(width: 6),
-                                Expanded(child: _buildGridToolChip(EditTool.highlighter, Icons.format_color_fill, '채우기')),
+                                // 1행: 블러, 모자이크, 채우기
+                                Row(
+                                  children: [
+                                    Expanded(child: _buildGridToolChip(EditTool.blur, Icons.blur_on, l10n.blur)),
+                                    const SizedBox(width: 6),
+                                    Expanded(child: _buildGridToolChip(EditTool.mosaic, Icons.grid_view, l10n.mosaic)),
+                                    const SizedBox(width: 6),
+                                    Expanded(child: _buildGridToolChip(EditTool.highlighter, Icons.format_color_fill, l10n.fill)),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                // 2행: 지우개, 스티커, 텍스트
+                                Row(
+                                  children: [
+                                    Expanded(child: _buildGridToolChip(EditTool.eraser, Icons.auto_fix_high, l10n.eraser)),
+                                    const SizedBox(width: 6),
+                                    Expanded(child: _buildGridToolChip(EditTool.sticker, Icons.emoji_emotions, l10n.sticker)),
+                                    const SizedBox(width: 6),
+                                    Expanded(child: _buildGridToolChip(EditTool.text, Icons.text_fields, l10n.text)),
+                                  ],
+                                ),
                               ],
-                            ),
-                            const SizedBox(height: 8),
-                            // 2행: 지우개, 스티커, 텍스트
-                            Row(
-                              children: [
-                                Expanded(child: _buildGridToolChip(EditTool.eraser, Icons.auto_fix_high, '지우개')),
-                                const SizedBox(width: 6),
-                                Expanded(child: _buildGridToolChip(EditTool.sticker, Icons.emoji_emotions, '스티커')),
-                                const SizedBox(width: 6),
-                                Expanded(child: _buildGridToolChip(EditTool.text, Icons.text_fields, '텍스트')),
-                              ],
-                            ),
-                          ],
+                            );
+                          },
                         ),
 
                         const SizedBox(height: 10),
@@ -1956,52 +1998,66 @@ class _EditorScreenState extends State<EditorScreen> {
                                   : Column(
                               children: [
                                 // 모드 선택
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  children: [
-                                    const Text('모드 ', style: TextStyle(color: Colors.white54, fontSize: 11)),
-                                    const SizedBox(width: 8),
-                                    _buildCompactModeChip(DrawMode.brush, Icons.brush),
-                                    _buildCompactModeChip(DrawMode.rectangle, Icons.crop_square),
-                                    _buildCompactModeChip(DrawMode.circle, Icons.circle_outlined),
-                                    // 색상 선택 (채우기일 때만)
-                                    if (_currentTool == EditTool.highlighter) ...[
-                                      const SizedBox(width: 12),
-                                      Container(width: 1, height: 24, color: Colors.white24),
-                                      const SizedBox(width: 12),
-                                      _buildColorChip(Colors.black, '검정'),
-                                      const SizedBox(width: 4),
-                                      _buildColorChip(Colors.yellow, '노랑'),
-                                      const SizedBox(width: 4),
-                                      _buildColorChip(Colors.greenAccent, '초록'),
-                                      const SizedBox(width: 4),
-                                      _buildColorChip(Colors.pinkAccent, '분홍'),
-                                      const SizedBox(width: 4),
-                                      _buildColorChip(Colors.cyanAccent, '하늘'),
-                                    ],
-                                  ],
+                                Builder(
+                                  builder: (context) {
+                                    final l10n = AppLocalizations.of(context);
+                                    return Row(
+                                      mainAxisAlignment: MainAxisAlignment.start,
+                                      children: [
+                                        Text('${l10n.mode} ', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                        const SizedBox(width: 8),
+                                        _buildCompactModeChip(DrawMode.brush, Icons.brush),
+                                        _buildCompactModeChip(DrawMode.rectangle, Icons.crop_square),
+                                        _buildCompactModeChip(DrawMode.circle, Icons.circle_outlined),
+                                        // 색상 선택 (채우기일 때만)
+                                        if (_currentTool == EditTool.highlighter) ...[
+                                          const SizedBox(width: 12),
+                                          Container(width: 1, height: 24, color: Colors.white24),
+                                          const SizedBox(width: 12),
+                                          _buildColorChip(Colors.black, l10n.black),
+                                          const SizedBox(width: 4),
+                                          _buildColorChip(Colors.yellow, l10n.yellow),
+                                          const SizedBox(width: 4),
+                                          _buildColorChip(Colors.greenAccent, l10n.green),
+                                          const SizedBox(width: 4),
+                                          _buildColorChip(Colors.pinkAccent, l10n.pink),
+                                          const SizedBox(width: 4),
+                                          _buildColorChip(Colors.cyanAccent, l10n.cyan),
+                                        ],
+                                      ],
+                                    );
+                                  },
                                 ),
                                 const SizedBox(height: 10),
                                 // 크기 슬라이더
-                                _buildSliderRow(
-                                  label: '크기',
-                                  value: _brushSize,
-                                  min: 10,
-                                  max: 120,
-                                  displayValue: '${_brushSize.toInt()}',
-                                  onChanged: (v) => setState(() => _brushSize = v),
-                                  presets: true,
-                                ),
-                                const SizedBox(height: 6),
-                                // 강도 슬라이더
-                                _buildSliderRow(
-                                  label: '강도',
-                                  value: _intensity,
-                                  min: 0.1,
-                                  max: 1.0,
-                                  displayValue: '${(_intensity * 100).toInt()}%',
-                                  onChanged: (v) => setState(() => _intensity = v),
-                                  enabled: _currentTool != EditTool.eraser,
+                                Builder(
+                                  builder: (context) {
+                                    final l10n = AppLocalizations.of(context);
+                                    return Column(
+                                      children: [
+                                        _buildSliderRow(
+                                          label: l10n.size,
+                                          value: _brushSize,
+                                          min: 10,
+                                          max: 120,
+                                          displayValue: '${_brushSize.toInt()}',
+                                          onChanged: (v) => setState(() => _brushSize = v),
+                                          presets: true,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        // 강도 슬라이더
+                                        _buildSliderRow(
+                                          label: l10n.intensity,
+                                          value: _intensity,
+                                          min: 0.1,
+                                          max: 1.0,
+                                          displayValue: '${(_intensity * 100).toInt()}%',
+                                          onChanged: (v) => setState(() => _intensity = v),
+                                          enabled: _currentTool != EditTool.eraser,
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ],
                             ),
@@ -2027,28 +2083,38 @@ class _EditorScreenState extends State<EditorScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _isProcessing ? null : _saveImage,
-                          icon: const Icon(Icons.save_alt, size: 18),
-                          label: const Text('저장', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-                          ),
+                        child: Builder(
+                          builder: (context) {
+                            final l10n = AppLocalizations.of(context);
+                            return ElevatedButton.icon(
+                              onPressed: _isProcessing ? null : _saveImage,
+                              icon: const Icon(Icons.save_alt, size: 18),
+                              label: Text(l10n.save, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                              ),
+                            );
+                          },
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _isProcessing ? null : _shareImage,
-                          icon: const Icon(Icons.share, size: 18),
-                          label: const Text('공유', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Colors.white38),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-                          ),
+                        child: Builder(
+                          builder: (context) {
+                            final l10n = AppLocalizations.of(context);
+                            return OutlinedButton.icon(
+                              onPressed: _isProcessing ? null : _shareImage,
+                              icon: const Icon(Icons.share, size: 18),
+                              label: Text(l10n.share, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white38),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ],
@@ -2127,7 +2193,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 color: Colors.black.withValues(alpha: 0.7),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Text('원본', style: TextStyle(color: Colors.white, fontSize: 12)),
+              child: Text(AppLocalizations.of(context).original, style: const TextStyle(color: Colors.white, fontSize: 12)),
             ),
           ),
           Positioned(
@@ -2139,7 +2205,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 color: Colors.black.withValues(alpha: 0.7),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Text('편집', style: TextStyle(color: Colors.white, fontSize: 12)),
+              child: Text(AppLocalizations.of(context).edited, style: const TextStyle(color: Colors.white, fontSize: 12)),
             ),
           ),
         ],
@@ -2237,15 +2303,20 @@ class _EditorScreenState extends State<EditorScreen> {
                 length: 3,
                 child: Column(
                   children: [
-                    const TabBar(
-                      indicatorColor: AppColors.primary,
-                      labelColor: Colors.white,
-                      unselectedLabelColor: Colors.white54,
-                      tabs: [
-                        Tab(text: '이모지'),
-                        Tab(text: '도형'),
-                        Tab(text: '텍스트'),
-                      ],
+                    Builder(
+                      builder: (context) {
+                        final l10n = AppLocalizations.of(context);
+                        return TabBar(
+                          indicatorColor: AppColors.primary,
+                          labelColor: Colors.white,
+                          unselectedLabelColor: Colors.white54,
+                          tabs: [
+                            Tab(text: l10n.emoji),
+                            Tab(text: l10n.shapes),
+                            Tab(text: l10n.text),
+                          ],
+                        );
+                      },
                     ),
                     Expanded(
                       child: TabBarView(
@@ -2369,12 +2440,12 @@ class _EditorScreenState extends State<EditorScreen> {
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(22),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.add, color: Colors.white, size: 20),
-                    SizedBox(width: 6),
-                    Text('스티커 추가', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                    const Icon(Icons.add, color: Colors.white, size: 20),
+                    const SizedBox(width: 6),
+                    Text(AppLocalizations.of(context).addSticker, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -2457,12 +2528,12 @@ class _EditorScreenState extends State<EditorScreen> {
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(22),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.add, color: Colors.white, size: 20),
-                        SizedBox(width: 6),
-                        Text('텍스트 추가', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                        const Icon(Icons.add, color: Colors.white, size: 20),
+                        const SizedBox(width: 6),
+                        Text(AppLocalizations.of(context).addText, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ),
@@ -2511,13 +2582,13 @@ class _EditorScreenState extends State<EditorScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('글자 ', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              Text('${AppLocalizations.of(context).textColor} ', style: const TextStyle(color: Colors.white54, fontSize: 11)),
               _buildTextColorChip(Colors.white, true),
               _buildTextColorChip(Colors.black, true),
               _buildTextColorChip(Colors.red, true),
               _buildTextColorChip(Colors.yellow, true),
               const SizedBox(width: 12),
-              const Text('배경 ', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              Text('${AppLocalizations.of(context).backgroundColor} ', style: const TextStyle(color: Colors.white54, fontSize: 11)),
               _buildTextColorChip(Colors.black, false),
               _buildTextColorChip(Colors.white, false),
               _buildTextColorChip(Colors.transparent, false),
@@ -2580,33 +2651,34 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _showTextInputDialog() {
     final controller = TextEditingController();
+    final l10n = AppLocalizations.of(context);
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('텍스트 입력'),
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.enterText),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: '텍스트를 입력하세요',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            hintText: l10n.enterTextHint,
+            border: const OutlineInputBorder(),
           ),
           maxLines: 2,
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () {
               if (controller.text.isNotEmpty) {
                 _addTextOverlay(controller.text);
               }
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
             },
-            child: const Text('추가'),
+            child: Text(l10n.add),
           ),
         ],
       ),
@@ -3078,13 +3150,14 @@ class _EditorScreenState extends State<EditorScreen> {
         AnalyticsService().logImageSaved(quality: '원본');
 
         if (!mounted) return;
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('저장되었습니다'),
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(l10n.saved),
               ],
             ),
             backgroundColor: Colors.green,
@@ -3093,8 +3166,9 @@ class _EditorScreenState extends State<EditorScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('저장 오류: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('${l10n.saveError}: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -3186,8 +3260,9 @@ class _EditorScreenState extends State<EditorScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('공유 오류: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('${l10n.shareError}: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
