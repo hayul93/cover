@@ -997,65 +997,70 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.all(32.0),
                 child: Column(
                   children: [
-                    // 설정 아이콘 (우상단)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: IconButton(
-                        onPressed: _openSettings,
-                        icon: Icon(
-                          Icons.settings_outlined,
-                          color: subtitleColor,
-                          size: 28,
-                        ),
-                        tooltip: l10n.settings,
+                    const SizedBox(height: 20),
+                    // 로고
+                    Image.asset(
+                      'assets/images/logo.png',
+                      height: 200,
+                    ),
+                    const SizedBox(height: 16),
+                    // 앱 이름
+                    Text(
+                      l10n.appName,
+                      style: TextStyle(
+                        fontSize: 48,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
                       ),
                     ),
-                    // 로고
-                    Stack(
-                      alignment: Alignment.bottomCenter,
+                    const SizedBox(height: 48),
+                    // 갤러리 & 카메라 버튼 (가로 배열)
+                    Row(
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 24),
-                          child: Image.asset(
-                            'assets/images/logo.png',
-                            height: 240,
+                        // 갤러리 버튼
+                        Expanded(
+                          child: SizedBox(
+                            height: 56,
+                            child: ElevatedButton.icon(
+                              onPressed: _isLoading ? null : _pickFromGallery,
+                              icon: const Icon(Icons.photo_library_rounded),
+                              label: Text(l10n.gallery, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                              ),
+                            ),
                           ),
                         ),
-                        Text(
-                          l10n.appName,
-                          style: TextStyle(
-                            fontSize: 56,
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
+                        const SizedBox(width: 12),
+                        // 카메라 버튼
+                        Expanded(
+                          child: SizedBox(
+                            height: 56,
+                            child: ElevatedButton.icon(
+                              onPressed: _isLoading ? null : _pickFromCamera,
+                              icon: const Icon(Icons.camera_alt_rounded),
+                              label: Text(l10n.camera, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 48),
-                    // 갤러리 버튼
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _pickFromGallery,
-                        icon: const Icon(Icons.photo_library_rounded),
-                        label: Text(l10n.gallery, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                        ),
-                      ),
-                    ),
                     const SizedBox(height: 16),
-                    // 카메라 버튼
+                    // 설정 버튼
                     SizedBox(
                       width: double.infinity,
                       height: 56,
                       child: OutlinedButton.icon(
-                        onPressed: _isLoading ? null : _pickFromCamera,
-                        icon: const Icon(Icons.camera_alt_rounded),
-                        label: Text(l10n.camera, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        onPressed: _openSettings,
+                        icon: Icon(Icons.settings_outlined, color: subtitleColor),
+                        label: Text(l10n.settings, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: textColor)),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: textColor,
                           side: BorderSide(color: subtitleColor),
@@ -4200,7 +4205,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.settings),
-        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: ListView(
         children: [
