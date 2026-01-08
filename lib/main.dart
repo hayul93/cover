@@ -4165,8 +4165,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // 앱스토어 ID (출시 후 실제 ID로 변경)
-  static const String _appStoreId = '6740097791';
+  // 앱스토어 ID
+  static const String _appStoreId = '6756909105';
 
   Future<void> _rateApp(BuildContext context) async {
     final url = Platform.isIOS
