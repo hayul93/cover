@@ -55,7 +55,6 @@ DevyulStudio ("Company," "we," "us," or "our") values the personal information o
 | Device information (model, OS version) | Service optimization, error analysis | Legitimate interests | 3 years |
 | App usage records | Service improvement | Legitimate interests | 3 years |
 | Purchase information | Payment processing, customer support | Performance of contract | 5 years (E-Commerce Act) |
-| Crash/error logs | App stability improvement | Legitimate interests | 90 days |
 
 ### 2.2 User-Provided Information
 
