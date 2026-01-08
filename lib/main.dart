@@ -1543,7 +1543,6 @@ class _EditorScreenState extends State<EditorScreen> {
             ],
           ),
           IOSUiSettings(
-            title: '이미지 자르기',
             cancelButtonTitle: '취소',
             doneButtonTitle: '완료',
             aspectRatioPresets: [
@@ -1551,16 +1550,10 @@ class _EditorScreenState extends State<EditorScreen> {
               CropAspectRatioPreset.square,
               CropAspectRatioPreset.ratio4x3,
               CropAspectRatioPreset.ratio16x9,
-              CropAspectRatioPreset.ratio3x2,
             ],
             aspectRatioLockEnabled: false,
-            resetAspectRatioEnabled: true,
-            rotateButtonsHidden: false,
+            rotateButtonsHidden: true,
             rotateClockwiseButtonHidden: true,
-            aspectRatioPickerButtonHidden: false,
-            resetButtonHidden: false,
-            hidesNavigationBar: false,
-            minimumAspectRatio: 0.1,
           ),
         ],
       );

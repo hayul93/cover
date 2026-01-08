@@ -13,7 +13,7 @@ dependencies:
   # Image Processing
   image: ^4.1.7
   image_picker: ^1.0.7
-  image_cropper: ^8.0.2
+  image_cropper: ^11.0.0
 
   # File & Storage
   path_provider: ^2.1.2
