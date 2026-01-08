@@ -2,7 +2,7 @@
 
 **Last Updated: January 8, 2026**
 **Effective Date: January 8, 2026**
-**Version: 2.0**
+**Version: 1.0**
 
 These Terms of Service ("Terms") govern the relationship between DevyulStudio ("Company," "we," "us," or "our") and users ("User," "you," or "your") regarding the use of the Cover app service ("Service").
 
@@ -356,8 +356,7 @@ These Terms shall be effective from **January 8, 2026**.
 
 | Version | Effective Date | Key Changes |
 |---------|----------------|-------------|
-| 2.0 | 2026.01.08 | Complete revision (enhanced international law compliance, detailed disclaimers) |
-| 1.0 | 2025.01.01 | Initial version |
+| 1.0 | 2026.01.08 | Initial version |
 
 ---
 

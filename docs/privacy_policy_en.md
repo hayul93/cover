@@ -2,7 +2,7 @@
 
 **Last Updated: January 8, 2026**
 **Effective Date: January 8, 2026**
-**Version: 2.0**
+**Version: 1.0**
 
 DevyulStudio ("Company," "we," "us," or "our") values the personal information of users ("User" or "you") who use the Cover app ("Service"). This Privacy Policy has been prepared in compliance with major privacy laws worldwide.
 
@@ -55,7 +55,6 @@ DevyulStudio ("Company," "we," "us," or "our") values the personal information o
 | Device information (model, OS version) | Service optimization, error analysis | Legitimate interests | 3 years |
 | App usage records | Service improvement | Legitimate interests | 3 years |
 | Purchase information | Payment processing, customer support | Performance of contract | 5 years (E-Commerce Act) |
-| IP address | Fraud prevention, security | Legitimate interests | 3 months |
 | Crash/error logs | App stability improvement | Legitimate interests | 90 days |
 
 ### 2.2 User-Provided Information
@@ -369,8 +368,7 @@ If this Policy is revised:
 
 | Version | Effective Date | Key Changes |
 |---------|----------------|-------------|
-| 2.0 | 2026.01.08 | Complete revision (enhanced international law compliance) |
-| 1.0 | 2025.01.01 | Initial version |
+| 1.0 | 2026.01.08 | Initial version |
 
 ---
 
