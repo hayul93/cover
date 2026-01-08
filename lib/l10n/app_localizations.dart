@@ -112,7 +112,9 @@ class AppLocalizations {
       'rateApp': 'Rate App',
       'rateAppDesc': 'Leave a review on Store',
       'privacyPolicy': 'Privacy Policy',
+      'privacyPolicyUrl': 'https://devyulstudio.notion.site/cover-privacy-policy-en',
       'termsOfService': 'Terms of Service',
+      'termsOfServiceUrl': 'https://devyulstudio.notion.site/cover-terms-of-service-en',
       'openSourceLicenses': 'Open Source Licenses',
       'appInfo': 'App Info',
       'version': 'Version',
@@ -283,7 +285,9 @@ class AppLocalizations {
       'rateApp': '앱 리뷰 작성',
       'rateAppDesc': '스토어에 리뷰 남기기',
       'privacyPolicy': '개인정보 처리방침',
+      'privacyPolicyUrl': 'https://devyulstudio.notion.site/cover-privacy-policy',
       'termsOfService': '이용약관',
+      'termsOfServiceUrl': 'https://devyulstudio.notion.site/cover-terms-of-service',
       'openSourceLicenses': '오픈소스 라이선스',
       'appInfo': '앱 정보',
       'version': '버전',
@@ -414,7 +418,9 @@ class AppLocalizations {
   String get rateApp => get('rateApp');
   String get rateAppDesc => get('rateAppDesc');
   String get privacyPolicy => get('privacyPolicy');
+  String get privacyPolicyUrl => get('privacyPolicyUrl');
   String get termsOfService => get('termsOfService');
+  String get termsOfServiceUrl => get('termsOfServiceUrl');
   String get openSourceLicenses => get('openSourceLicenses');
   String get appInfo => get('appInfo');
   String get version => get('version');

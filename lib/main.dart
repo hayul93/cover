@@ -901,8 +901,6 @@ class OnboardingPage {
 
 // ==================== Home Screen ====================
 
-// ==================== Main Screen with Bottom Navigation ====================
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -911,64 +909,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0;
-
-  final List<Widget> _screens = [
-    const _HomeTab(),
-    const SettingsScreen(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 0.5),
-          ),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: Colors.grey,
-          selectedFontSize: 12,
-          unselectedFontSize: 12,
-          items: [
-            BottomNavigationBarItem(
-              icon: const Icon(Icons.home_outlined),
-              activeIcon: const Icon(Icons.home),
-              label: l10n.home,
-            ),
-            BottomNavigationBarItem(
-              icon: const Icon(Icons.settings_outlined),
-              activeIcon: const Icon(Icons.settings),
-              label: l10n.settings,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ==================== Home Tab ====================
-
-class _HomeTab extends StatefulWidget {
-  const _HomeTab();
-
-  @override
-  State<_HomeTab> createState() => _HomeTabState();
-}
-
-class _HomeTabState extends State<_HomeTab> {
   final ImagePicker _picker = ImagePicker();
   bool _isLoading = false;
 
@@ -1034,6 +974,13 @@ class _HomeTabState extends State<_HomeTab> {
     }
   }
 
+  void _openSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SettingsScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1041,79 +988,96 @@ class _HomeTabState extends State<_HomeTab> {
     final subtitleColor = isDark ? Colors.white70 : Colors.black54;
     final l10n = AppLocalizations.of(context);
 
-    return SafeArea(
-      child: Stack(
-        children: [
-          SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(32.0),
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  Stack(
-                    alignment: Alignment.bottomCenter,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 24),
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          height: 240,
+    return Scaffold(
+      body: SafeArea(
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  children: [
+                    // 설정 아이콘 (우상단)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        onPressed: _openSettings,
+                        icon: Icon(
+                          Icons.settings_outlined,
+                          color: subtitleColor,
+                          size: 28,
                         ),
-                      ),
-                      Text(
-                        l10n.appName,
-                        style: TextStyle(
-                          fontSize: 56,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 48),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _pickFromGallery,
-                      icon: const Icon(Icons.photo_library_rounded),
-                      label: Text(l10n.gallery, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                        tooltip: l10n.settings,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton.icon(
-                      onPressed: _isLoading ? null : _pickFromCamera,
-                      icon: const Icon(Icons.camera_alt_rounded),
-                      label: Text(l10n.camera, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: textColor,
-                        side: BorderSide(color: subtitleColor),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                    // 로고
+                    Stack(
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 24),
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            height: 240,
+                          ),
+                        ),
+                        Text(
+                          l10n.appName,
+                          style: TextStyle(
+                            fontSize: 56,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 48),
+                    // 갤러리 버튼
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading ? null : _pickFromGallery,
+                        icon: const Icon(Icons.photo_library_rounded),
+                        label: Text(l10n.gallery, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                        ),
                       ),
                     ),
-                  ),
-                  // 네이티브 광고
-                  const SizedBox(height: 24),
-                  const NativeAdWidget(),
-                  const SizedBox(height: 32),
-                ],
+                    const SizedBox(height: 16),
+                    // 카메라 버튼
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: OutlinedButton.icon(
+                        onPressed: _isLoading ? null : _pickFromCamera,
+                        icon: const Icon(Icons.camera_alt_rounded),
+                        label: Text(l10n.camera, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: textColor,
+                          side: BorderSide(color: subtitleColor),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                        ),
+                      ),
+                    ),
+                    // 네이티브 광고
+                    const SizedBox(height: 24),
+                    const NativeAdWidget(),
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             ),
-          ),
-          if (_isLoading)
-            Container(
-              color: Colors.black54,
-              child: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-            ),
-        ],
+            if (_isLoading)
+              Container(
+                color: Colors.black54,
+                child: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -4336,12 +4300,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _SettingsTile(
             icon: Icons.privacy_tip_outlined,
             title: l10n.privacyPolicy,
-            onTap: () => _openUrl('https://devyulstudio.notion.site/cover-privacy-policy'),
+            onTap: () => _openUrl(l10n.privacyPolicyUrl),
           ),
           _SettingsTile(
             icon: Icons.article_outlined,
             title: l10n.termsOfService,
-            onTap: () => _openUrl('https://devyulstudio.notion.site/cover-terms-of-service'),
+            onTap: () => _openUrl(l10n.termsOfServiceUrl),
           ),
 
           const SizedBox(height: 32),
