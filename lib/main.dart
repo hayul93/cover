@@ -17,8 +17,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import 'config/api_keys.dart';
 import 'config/constants.dart';
@@ -4125,50 +4123,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _sendEmail() async {
-    // 기기 정보 수집
-    String deviceInfo = '';
-    try {
-      final packageInfo = await PackageInfo.fromPlatform();
-      final deviceInfoPlugin = DeviceInfoPlugin();
-
-      if (Platform.isIOS) {
-        final iosInfo = await deviceInfoPlugin.iosInfo;
-        deviceInfo = '''
----
-앱 버전: ${packageInfo.version} (${packageInfo.buildNumber})
-기기 모델: ${iosInfo.model}
-기기 이름: ${iosInfo.name}
-시스템: ${iosInfo.systemName} ${iosInfo.systemVersion}
-''';
-      } else if (Platform.isAndroid) {
-        final androidInfo = await deviceInfoPlugin.androidInfo;
-        deviceInfo = '''
----
-앱 버전: ${packageInfo.version} (${packageInfo.buildNumber})
-기기 모델: ${androidInfo.model}
-제조사: ${androidInfo.manufacturer}
-시스템: Android ${androidInfo.version.release} (SDK ${androidInfo.version.sdkInt})
-''';
-      }
-    } catch (e) {
-      deviceInfo = '\n---\n기기 정보를 가져올 수 없습니다.';
-    }
-
-    final uri = Uri(
-      scheme: 'mailto',
-      path: 'parksy785@gmail.com',
-      queryParameters: {
-        'subject': '[Cover 앱 문의]',
-        'body': '\n\n문의 내용을 입력해주세요.\n$deviceInfo',
-      },
-    );
-
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
-  }
-
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
@@ -4257,12 +4211,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: '앱 리뷰 작성',
             subtitle: '별점과 리뷰로 응원해주세요',
             onTap: () => _rateApp(context),
-          ),
-          _SettingsTile(
-            icon: Icons.mail_outline,
-            title: '문의하기',
-            subtitle: 'parksy785@gmail.com',
-            onTap: _sendEmail,
           ),
 
           const SizedBox(height: 8),
