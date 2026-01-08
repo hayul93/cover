@@ -572,35 +572,6 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
   }
 }
 
-// 최근 편집 이미지 관리
-class RecentImages {
-  static const String _key = 'recent_images';
-  static const int _maxImages = 20;
-
-  static Future<List<String>> getRecentImages() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_key) ?? [];
-  }
-
-  static Future<void> addImage(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    final images = prefs.getStringList(_key) ?? [];
-    images.remove(path);
-    images.insert(0, path);
-    if (images.length > _maxImages) {
-      images.removeRange(_maxImages, images.length);
-    }
-    await prefs.setStringList(_key, images);
-  }
-
-  static Future<void> removeImage(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    final images = prefs.getStringList(_key) ?? [];
-    images.remove(path);
-    await prefs.setStringList(_key, images);
-  }
-}
-
 // ==================== 워터마크 설정 (Pro 전용) ====================
 
 enum WatermarkPosition {
@@ -981,7 +952,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _screens = [
     const _HomeTab(),
-    const _RecentImagesTab(),
     const SettingsScreen(),
   ];
 
@@ -1012,11 +982,6 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icon(Icons.home_outlined),
               activeIcon: Icon(Icons.home),
               label: '홈',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.history_outlined),
-              activeIcon: Icon(Icons.history),
-              label: '최근',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.settings_outlined),
@@ -1187,194 +1152,6 @@ class _HomeTabState extends State<_HomeTab> {
   }
 }
 
-// ==================== Recent Images Tab ====================
-
-class _RecentImagesTab extends StatefulWidget {
-  const _RecentImagesTab();
-
-  @override
-  State<_RecentImagesTab> createState() => _RecentImagesTabState();
-}
-
-class _RecentImagesTabState extends State<_RecentImagesTab> {
-  List<String> _recentImages = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadRecentImages();
-  }
-
-  Future<void> _loadRecentImages() async {
-    setState(() => _isLoading = true);
-    final images = await RecentImages.getRecentImages();
-    // 존재하는 파일만 필터링
-    final existingImages = <String>[];
-    for (final path in images) {
-      if (await File(path).exists()) {
-        existingImages.add(path);
-      }
-    }
-    if (mounted) {
-      setState(() {
-        _recentImages = existingImages;
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _openRecentImage(String path) async {
-    final file = File(path);
-    if (await file.exists()) {
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => EditorScreen(imageFile: file),
-          ),
-        ).then((_) => _loadRecentImages());
-      }
-    } else {
-      await RecentImages.removeImage(path);
-      _loadRecentImages();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('파일을 찾을 수 없습니다')),
-        );
-      }
-    }
-  }
-
-  Future<void> _clearAllImages() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('최근 이미지 삭제', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          '모든 최근 이미지 기록을 삭제하시겠습니까?\n(원본 파일은 삭제되지 않습니다)',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('삭제', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('recent_images');
-      _loadRecentImages();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final subtitleColor = isDark ? Colors.white70 : Colors.black54;
-
-    return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 헤더
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '최근 이미지',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
-                if (_recentImages.isNotEmpty)
-                  TextButton(
-                    onPressed: _clearAllImages,
-                    child: Text(
-                      '모두 지우기',
-                      style: TextStyle(color: subtitleColor, fontSize: 14),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // 이미지 그리드
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                : _recentImages.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.photo_library_outlined, size: 64, color: subtitleColor),
-                            const SizedBox(height: 16),
-                            Text(
-                              '최근 편집한 이미지가 없습니다',
-                              style: TextStyle(color: subtitleColor, fontSize: 16),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '홈에서 이미지를 선택해 편집을 시작하세요',
-                              style: TextStyle(color: subtitleColor.withValues(alpha: 0.6), fontSize: 14),
-                            ),
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadRecentImages,
-                        color: AppColors.primary,
-                        child: GridView.builder(
-                          padding: const EdgeInsets.all(16),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                          ),
-                          itemCount: _recentImages.length,
-                          itemBuilder: (context, index) {
-                            final path = _recentImages[index];
-                            return GestureDetector(
-                              onTap: () => _openRecentImage(path),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(
-                                  File(path),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      color: Colors.grey[800],
-                                      child: const Icon(Icons.broken_image, color: Colors.white38),
-                                    );
-                                  },
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ==================== Editor Screen ====================
 
 enum EditTool { blur, mosaic, eraser, blackBar, highlighter, sticker, text }
@@ -1462,50 +1239,6 @@ class StickerPresets {
 
 // 브러시 프리셋
 enum BrushPreset { small, medium, large }
-
-// 이미지 품질 프리셋
-enum ImageQuality { low, medium, high, original }
-
-extension ImageQualitySettings on ImageQuality {
-  int get jpegQuality {
-    switch (this) {
-      case ImageQuality.low:
-        return 60;
-      case ImageQuality.medium:
-        return 80;
-      case ImageQuality.high:
-        return 90;
-      case ImageQuality.original:
-        return 100;
-    }
-  }
-
-  String get label {
-    switch (this) {
-      case ImageQuality.low:
-        return '낮음';
-      case ImageQuality.medium:
-        return '중간';
-      case ImageQuality.high:
-        return '높음';
-      case ImageQuality.original:
-        return '원본';
-    }
-  }
-
-  String get description {
-    switch (this) {
-      case ImageQuality.low:
-        return '60% • 파일 크기 최소';
-      case ImageQuality.medium:
-        return '80% • 균형잡힌 품질';
-      case ImageQuality.high:
-        return '90% • 고품질';
-      case ImageQuality.original:
-        return '100% • 최고 품질';
-    }
-  }
-}
 
 extension BrushPresetSize on BrushPreset {
   double get size {
@@ -2334,7 +2067,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: _isProcessing ? null : _showSaveOptionsDialog,
+                          onPressed: _isProcessing ? null : _saveImage,
                           icon: const Icon(Icons.save_alt, size: 18),
                           label: const Text('저장', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                           style: ElevatedButton.styleFrom(
@@ -3304,297 +3037,6 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  void _showSaveOptionsDialog() async {
-    if (_currentBytes == null) return;
-
-    final isPro = SubscriptionService().isProUser;
-    final remainingCount = await SaveLimitService.getRemainingCount();
-
-    // 무료 사용자가 저장 횟수를 모두 사용한 경우
-    if (!isPro && remainingCount <= 0) {
-      if (!mounted) return;
-      _showUpgradeDialog(
-        title: '일일 저장 횟수 초과',
-        message: '오늘의 무료 저장 횟수(${SaveLimitService.maxFreeSavesPerDay}회)를 모두 사용했습니다.\nPro로 업그레이드하면 무제한으로 저장할 수 있습니다.',
-      );
-      return;
-    }
-
-    // 예상 파일 크기 계산
-    final originalSize = _currentBytes!.length;
-    String estimateSize(ImageQuality quality) {
-      final estimatedBytes = (originalSize * quality.jpegQuality / 100).round();
-      if (estimatedBytes < 1024) {
-        return '$estimatedBytes B';
-      } else if (estimatedBytes < 1024 * 1024) {
-        return '${(estimatedBytes / 1024).toStringAsFixed(1)} KB';
-      } else {
-        return '${(estimatedBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-      }
-    }
-
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 핸들
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(top: 12, bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              // 타이틀
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    const Icon(Icons.high_quality, color: Colors.white, size: 24),
-                    const SizedBox(width: 12),
-                    const Text(
-                      '저장 품질 선택',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    // 남은 저장 횟수 표시 (무료 사용자만)
-                    if (!isPro)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: remainingCount <= 2
-                              ? Colors.orange.withValues(alpha: 0.2)
-                              : Colors.white.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '오늘 $remainingCount회 남음',
-                          style: TextStyle(
-                            color: remainingCount <= 2 ? Colors.orange : Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              // 품질 옵션 (무료 사용자는 medium까지만)
-              ...ImageQuality.values.map((quality) => _buildQualityOption(
-                    quality,
-                    estimateSize(quality),
-                    isPro: isPro,
-                  )),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQualityOption(ImageQuality quality, String estimatedSize, {required bool isPro}) {
-    final isRecommended = quality == ImageQuality.high;
-    // 무료 사용자는 medium(80%)까지만 사용 가능
-    final isProOnly = !isPro && (quality == ImageQuality.high || quality == ImageQuality.original);
-    final isDisabled = isProOnly;
-
-    return InkWell(
-      onTap: isDisabled
-          ? () {
-              Navigator.pop(context);
-              _showUpgradeDialog(
-                title: '고화질은 Pro 전용',
-                message: '${quality.label} 화질(${quality.jpegQuality}%)로 저장하려면\nPro로 업그레이드하세요.',
-              );
-            }
-          : () {
-              Navigator.pop(context);
-              _saveImageWithQuality(quality);
-            },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: isDisabled
-                    ? Colors.white.withValues(alpha: 0.04)
-                    : isRecommended
-                        ? AppColors.primary.withValues(alpha: 0.2)
-                        : Colors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Text(
-                  '${quality.jpegQuality}%',
-                  style: TextStyle(
-                    color: isDisabled
-                        ? Colors.white30
-                        : isRecommended
-                            ? AppColors.primary
-                            : Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        quality.label,
-                        style: TextStyle(
-                          color: isDisabled ? Colors.white38 : Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      if (isProOnly) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
-                            ),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'PRO',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ] else if (isRecommended && isPro) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            '추천',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    quality.description,
-                    style: TextStyle(
-                      color: isDisabled ? Colors.white24 : Colors.white54,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              '~$estimatedSize',
-              style: TextStyle(
-                color: isDisabled ? Colors.white24 : Colors.white54,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              isDisabled ? Icons.lock : Icons.chevron_right,
-              color: isDisabled ? Colors.white24 : Colors.white38,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Pro 업그레이드 다이얼로그 표시
-  void _showUpgradeDialog({required String title, required String message}) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.star, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(color: Colors.white, fontSize: 18),
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          message,
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('나중에'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _showProSubscriptionSheet();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFFD700),
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('Pro 보기'),
-          ),
-        ],
-      ),
-    );
-  }
-
   // Pro 구독 시트 표시
   void _showProSubscriptionSheet() {
     showModalBottomSheet(
@@ -3605,7 +3047,22 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  Future<void> _saveImageWithQuality(ImageQuality quality) async {
+  // 저장 (무료 사용자는 광고 먼저)
+  Future<void> _saveImage() async {
+    if (_currentBytes == null) return;
+
+    // 무료 사용자는 광고 먼저 표시
+    if (!SubscriptionService().isProUser) {
+      setState(() => _isProcessing = true);
+      AdService().showInterstitialAd(onAdClosed: () {
+        _performSave();
+      });
+    } else {
+      _performSave();
+    }
+  }
+
+  Future<void> _performSave() async {
     if (_currentBytes == null) return;
 
     setState(() => _isProcessing = true);
@@ -3648,15 +3105,12 @@ class _EditorScreenState extends State<EditorScreen> {
       }
 
       // 워터마크 적용 (Pro 유저만)
-      debugPrint('워터마크 체크 - Pro: ${SubscriptionService().isProUser}');
       if (SubscriptionService().isProUser) {
         final watermarkEnabled = await WatermarkSettings.isEnabled();
-        debugPrint('워터마크 활성화: $watermarkEnabled');
         if (watermarkEnabled) {
           final text = await WatermarkSettings.getText();
           final position = await WatermarkSettings.getPosition();
           final opacity = await WatermarkSettings.getOpacity();
-          debugPrint('워터마크 적용 - 텍스트: $text, 위치: ${position.index}, 투명도: $opacity');
 
           finalBytes = await compute(compositeWatermark, WatermarkRequest(
             imageBytes: finalBytes,
@@ -3666,7 +3120,6 @@ class _EditorScreenState extends State<EditorScreen> {
               opacity: opacity,
             ),
           ));
-          debugPrint('워터마크 적용 완료');
         }
       }
 
@@ -3686,31 +3139,25 @@ class _EditorScreenState extends State<EditorScreen> {
       await tempFile.delete();
 
       if (mounted) {
-        // 최근 이미지에 원본 경로 추가
-        await RecentImages.addImage(widget.imageFile.path);
-
         // 저장 횟수 증가 (무료 사용자)
         await SaveLimitService.incrementSaveCount();
 
         // Analytics 이벤트
-        AnalyticsService().logImageSaved(quality: quality.label);
+        AnalyticsService().logImageSaved(quality: '원본');
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 8),
-                Text('${quality.label} 품질로 저장되었습니다'),
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('저장되었습니다'),
               ],
             ),
             backgroundColor: Colors.green,
           ),
         );
-
-        // 저장 완료 후 전면 광고 표시 (Pro 유저 제외)
-        AdService().showInterstitialAd();
       }
     } catch (e) {
       if (mounted) {
@@ -3723,22 +3170,72 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
+  // 공유 (무료 사용자는 광고 먼저)
   Future<void> _shareImage() async {
+    if (_currentBytes == null) return;
+
+    // 무료 사용자는 광고 먼저 표시
+    if (!SubscriptionService().isProUser) {
+      setState(() => _isProcessing = true);
+      AdService().showInterstitialAd(onAdClosed: () {
+        _performShare();
+      });
+    } else {
+      _performShare();
+    }
+  }
+
+  Future<void> _performShare() async {
     if (_currentBytes == null) return;
 
     setState(() => _isProcessing = true);
 
     try {
+      // 스티커가 있으면 합성
+      Uint8List finalBytes = _currentBytes!;
+      if (_stickers.isNotEmpty) {
+        finalBytes = await compute(compositeStickers, CompositeRequest(
+          imageBytes: finalBytes,
+          stickers: _stickers.map((s) => StickerInfo(
+            content: s.content,
+            positionX: s.position.dx,
+            positionY: s.position.dy,
+            scale: s.scale,
+            rotation: s.rotation,
+            isEmoji: s.isEmoji,
+          )).toList(),
+        ));
+      }
+
+      // 텍스트 오버레이가 있으면 합성
+      if (_textOverlays.isNotEmpty) {
+        finalBytes = await compute(compositeTexts, TextCompositeRequest(
+          imageBytes: finalBytes,
+          texts: _textOverlays.map((t) => TextOverlayInfo(
+            text: t.text,
+            positionX: t.position.dx,
+            positionY: t.position.dy,
+            scale: t.scale,
+            colorR: (t.color.r * 255.0).round().clamp(0, 255),
+            colorG: (t.color.g * 255.0).round().clamp(0, 255),
+            colorB: (t.color.b * 255.0).round().clamp(0, 255),
+            bgColorR: (t.backgroundColor.r * 255.0).round().clamp(0, 255),
+            bgColorG: (t.backgroundColor.g * 255.0).round().clamp(0, 255),
+            bgColorB: (t.backgroundColor.b * 255.0).round().clamp(0, 255),
+            hasBackground: t.hasBackground,
+          )).toList(),
+        ));
+      }
+
       // 임시 파일 생성
       final tempDir = await getTemporaryDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final tempFile = File('${tempDir.path}/Cover_$timestamp.jpg');
-      await tempFile.writeAsBytes(_currentBytes!);
+      await tempFile.writeAsBytes(finalBytes);
 
       // 공유
       await Share.shareXFiles(
         [XFile(tempFile.path)],
-        text: 'Cover로 편집한 이미지',
       );
 
       // Analytics 이벤트
