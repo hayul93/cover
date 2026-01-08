@@ -572,62 +572,6 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
   }
 }
 
-// ==================== 워터마크 설정 (Pro 전용) ====================
-
-enum WatermarkPosition {
-  topLeft, topCenter, topRight,
-  centerLeft, center, centerRight,
-  bottomLeft, bottomCenter, bottomRight
-}
-
-class WatermarkSettings {
-  static const String _enabledKey = 'watermark_enabled';
-  static const String _textKey = 'watermark_text';
-  static const String _positionKey = 'watermark_position';
-  static const String _opacityKey = 'watermark_opacity';
-
-  static Future<bool> isEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_enabledKey) ?? false;
-  }
-
-  static Future<void> setEnabled(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_enabledKey, enabled);
-  }
-
-  static Future<String> getText() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_textKey) ?? 'Cover';
-  }
-
-  static Future<void> setText(String text) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_textKey, text);
-  }
-
-  static Future<WatermarkPosition> getPosition() async {
-    final prefs = await SharedPreferences.getInstance();
-    final index = prefs.getInt(_positionKey) ?? 8; // default: bottomRight
-    return WatermarkPosition.values[index];
-  }
-
-  static Future<void> setPosition(WatermarkPosition position) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_positionKey, position.index);
-  }
-
-  static Future<double> getOpacity() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getDouble(_opacityKey) ?? 0.5;
-  }
-
-  static Future<void> setOpacity(double opacity) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_opacityKey, opacity);
-  }
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -3037,16 +2981,6 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  // Pro 구독 시트 표시
-  void _showProSubscriptionSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const _ProSubscriptionSheet(),
-    );
-  }
-
   // 저장 (무료 사용자는 광고 먼저)
   Future<void> _saveImage() async {
     if (_currentBytes == null) return;
@@ -3102,25 +3036,6 @@ class _EditorScreenState extends State<EditorScreen> {
             hasBackground: t.hasBackground,
           )).toList(),
         ));
-      }
-
-      // 워터마크 적용 (Pro 유저만)
-      if (SubscriptionService().isProUser) {
-        final watermarkEnabled = await WatermarkSettings.isEnabled();
-        if (watermarkEnabled) {
-          final text = await WatermarkSettings.getText();
-          final position = await WatermarkSettings.getPosition();
-          final opacity = await WatermarkSettings.getOpacity();
-
-          finalBytes = await compute(compositeWatermark, WatermarkRequest(
-            imageBytes: finalBytes,
-            watermark: WatermarkInfo(
-              text: text,
-              positionIndex: position.index,
-              opacity: opacity,
-            ),
-          ));
-        }
       }
 
       // 파일명 생성
@@ -3464,122 +3379,6 @@ Uint8List compositeTexts(TextCompositeRequest request) {
       }
     }
   }
-
-  return Uint8List.fromList(img.encodeJpg(image, quality: 95));
-}
-
-// 워터마크 정보 클래스
-class WatermarkInfo {
-  final String text;
-  final int positionIndex; // 0-8 (topLeft to bottomRight)
-  final double opacity;
-
-  WatermarkInfo({
-    required this.text,
-    required this.positionIndex,
-    required this.opacity,
-  });
-}
-
-class WatermarkRequest {
-  final Uint8List imageBytes;
-  final WatermarkInfo watermark;
-
-  WatermarkRequest({
-    required this.imageBytes,
-    required this.watermark,
-  });
-}
-
-// 워터마크 합성 함수 (Isolate에서 실행)
-Uint8List compositeWatermark(WatermarkRequest request) {
-  final image = img.decodeImage(request.imageBytes);
-  if (image == null) return request.imageBytes;
-
-  final watermark = request.watermark;
-  final text = watermark.text;
-  if (text.isEmpty) return request.imageBytes;
-
-  // 폰트 크기 계산 (이미지 크기에 비례)
-  final scale = (image.width / 800).clamp(0.5, 3.0);
-  final font = img.arial24;
-
-  // 텍스트 크기 추정
-  final charWidth = 14 * scale;
-  final charHeight = 24 * scale;
-  final textWidth = (text.length * charWidth).toInt();
-  final textHeight = charHeight.toInt();
-  final padding = (10 * scale).toInt();
-
-  // 위치 계산 (9개 위치)
-  final margin = (image.width * 0.03).toInt();
-  int x, y;
-
-  // 열 위치 (0: left, 1: center, 2: right)
-  final col = watermark.positionIndex % 3;
-  if (col == 0) {
-    x = margin;
-  } else if (col == 1) {
-    x = (image.width - textWidth - padding * 2) ~/ 2;
-  } else {
-    x = image.width - textWidth - padding * 2 - margin;
-  }
-
-  // 행 위치 (0: top, 1: center, 2: bottom)
-  final row = watermark.positionIndex ~/ 3;
-  if (row == 0) {
-    y = margin;
-  } else if (row == 1) {
-    y = (image.height - textHeight - padding * 2) ~/ 2;
-  } else {
-    y = image.height - textHeight - padding * 2 - margin;
-  }
-
-  final alpha = (watermark.opacity * 255).toInt().clamp(0, 255);
-
-  // 반투명 배경 사각형 그리기
-  final bgWidth = textWidth + padding * 2;
-  final bgHeight = textHeight + padding * 2;
-
-  for (int dy = 0; dy < bgHeight; dy++) {
-    for (int dx = 0; dx < bgWidth; dx++) {
-      final px = x + dx;
-      final py = y + dy;
-      if (px >= 0 && px < image.width && py >= 0 && py < image.height) {
-        final oldPixel = image.getPixel(px, py);
-        // 반투명 검은 배경 (50% 투명도 * 사용자 설정 투명도)
-        final bgAlpha = 0.5 * watermark.opacity;
-        final newR = (oldPixel.r * (1 - bgAlpha)).toInt().clamp(0, 255);
-        final newG = (oldPixel.g * (1 - bgAlpha)).toInt().clamp(0, 255);
-        final newB = (oldPixel.b * (1 - bgAlpha)).toInt().clamp(0, 255);
-        image.setPixel(px, py, img.ColorRgba8(newR, newG, newB, 255));
-      }
-    }
-  }
-
-  // 텍스트 그리기 (흰색, 그림자 효과) - 중앙 정렬
-  final textX = x + (bgWidth - textWidth) ~/ 2;
-  final textY = y + (bgHeight - textHeight) ~/ 2;
-
-  // 그림자 (검은색, 약간 오프셋)
-  img.drawString(
-    image,
-    text,
-    font: font,
-    x: textX + 1,
-    y: textY + 1,
-    color: img.ColorRgba8(0, 0, 0, (alpha * 0.5).toInt()),
-  );
-
-  // 메인 텍스트 (흰색)
-  img.drawString(
-    image,
-    text,
-    font: font,
-    x: textX,
-    y: textY,
-    color: img.ColorRgba8(255, 255, 255, alpha),
-  );
 
   return Uint8List.fromList(img.encodeJpg(image, quality: 95));
 }
@@ -4294,44 +4093,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _watermarkEnabled = false;
-  bool _isPro = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final enabled = await WatermarkSettings.isEnabled();
-    final isPro = SubscriptionService().isProUser;
-    if (mounted) {
-      setState(() {
-        _watermarkEnabled = enabled;
-        _isPro = isPro;
-      });
-    }
-  }
-
-  void _showWatermarkSettings() {
-    if (!_isPro) {
-      _showProSubscription(context);
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _WatermarkSettingsSheet(
-        onSettingsChanged: () {
-          _loadSettings();
-        },
-      ),
-    );
-  }
-
   void _showProSubscription(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -4485,42 +4246,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          // 워터마크 설정 (Pro 전용)
-          const _SectionHeader(title: '워터마크'),
-          _SettingsTile(
-            icon: Icons.branding_watermark,
-            title: '워터마크 추가',
-            subtitle: _watermarkEnabled ? '활성화됨' : '비활성화됨',
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!_isPro)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'PRO',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-              ],
-            ),
-            onTap: _showWatermarkSettings,
-          ),
-
-          const SizedBox(height: 8),
-
           // 지원
           const _SectionHeader(title: '지원'),
           _SettingsTile(
@@ -4613,70 +4338,12 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
   final SubscriptionService _subscriptionService = SubscriptionService();
   List<Package>? _packages;
   bool _isLoading = false;
-  int _selectedPlanIndex = 0; // 0: 평생, 1: 연간, 2: 월간
 
-  // 제품 ID로 패키지 찾기
+  // 광고 제거 (평생 이용권) 패키지
   Package? get _lifetimePackage => _packages?.cast<Package?>().firstWhere(
     (p) => p?.storeProduct.identifier == SubscriptionService.lifetimeProductId,
     orElse: () => null,
   );
-
-  Package? get _yearlyPackage => _packages?.cast<Package?>().firstWhere(
-    (p) => p?.storeProduct.identifier == SubscriptionService.yearlyProductId,
-    orElse: () => null,
-  );
-
-  Package? get _monthlyPackage => _packages?.cast<Package?>().firstWhere(
-    (p) => p?.storeProduct.identifier == SubscriptionService.monthlyProductId,
-    orElse: () => null,
-  );
-
-  Package? get _selectedPackage {
-    switch (_selectedPlanIndex) {
-      case 0: return _lifetimePackage;
-      case 1: return _yearlyPackage;
-      case 2: return _monthlyPackage;
-      default: return null;
-    }
-  }
-
-  // 연간 구독 할인율 계산
-  String _getYearlySubtitle() {
-    final yearlyProduct = _yearlyPackage?.storeProduct;
-    final monthlyProduct = _monthlyPackage?.storeProduct;
-
-    // 패키지가 없으면 기본 텍스트 반환
-    if (yearlyProduct == null || monthlyProduct == null) {
-      return '월 ₩1,250 (43% 할인)';
-    }
-
-    final yearly = yearlyProduct.price;
-    final monthly = monthlyProduct.price;
-
-    if (monthly <= 0) return '';
-
-    final yearlyMonthly = yearly / 12;
-    final discount = ((monthly - yearlyMonthly) / monthly * 100).round();
-
-    // 통화 코드에 따라 포맷팅
-    final currencyCode = yearlyProduct.currencyCode;
-    String formattedMonthly;
-
-    if (currencyCode == 'KRW' || currencyCode == 'JPY') {
-      // 소수점 없는 통화
-      formattedMonthly = yearlyMonthly.round().toString().replaceAllMapped(
-        RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
-    } else {
-      // 소수점 있는 통화 (USD, EUR 등)
-      formattedMonthly = yearlyMonthly.toStringAsFixed(2);
-    }
-
-    // 통화 기호 가져오기 (priceString에서 추출)
-    final priceString = yearlyProduct.priceString;
-    final currencySymbol = priceString.replaceAll(RegExp(r'[\d,.\s]'), '').trim();
-
-    return '월 $currencySymbol$formattedMonthly ($discount% 할인)';
-  }
 
   @override
   void initState() {
@@ -4698,27 +4365,24 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
     setState(() => _isLoading = true);
 
     try {
-      // 선택한 패키지로 구매 진행
-      final package = _selectedPackage;
+      final package = _lifetimePackage;
       if (package != null) {
         final success = await _subscriptionService.purchasePackage(package);
 
         if (success) {
-          final plan = _selectedPlanIndex == 0 ? 'lifetime' : (_selectedPlanIndex == 1 ? 'yearly' : 'monthly');
-          AnalyticsService().logSubscriptionStarted(plan);
+          AnalyticsService().logSubscriptionStarted('ad_removal');
         }
 
         if (mounted) {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(success ? 'Pro 구독이 활성화되었습니다!' : '구매가 취소되었습니다'),
+              content: Text(success ? '광고가 제거되었습니다!' : '구매가 취소되었습니다'),
               backgroundColor: success ? Colors.green : Colors.orange,
             ),
           );
         }
       } else {
-        // 패키지를 찾을 수 없음
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -4804,77 +4468,74 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                   const SizedBox(height: 12),
 
                   // 헤더
-                  const Icon(Icons.workspace_premium, size: 48, color: Color(0xFF6366F1)),
+                  const Icon(Icons.block, size: 48, color: Color(0xFF6366F1)),
                   const SizedBox(height: 12),
                   const Text(
-                    'Cover Pro',
+                    '광고 제거',
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '모든 프리미엄 기능을 무제한으로 사용하세요',
+                    '한 번 구매로 영구적으로 광고 없이 사용하세요',
                     style: TextStyle(color: Colors.grey[600], fontSize: 14),
                   ),
 
                   const SizedBox(height: 24),
 
-                  // 기능 목록
+                  // 혜택 설명
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      children: [
-                        _buildFeatureRow(Icons.high_quality, '원본 화질 저장'),
-                        _buildFeatureRow(Icons.all_inclusive, '무제한 저장'),
-                        _buildFeatureRow(Icons.branding_watermark, '워터마크 기능'),
-                        _buildFeatureRow(Icons.emoji_emotions, '50+ 프리미엄 스티커'),
-                        _buildFeatureRow(Icons.block, '광고 제거'),
-                        _buildFeatureRow(Icons.support_agent, '우선 고객 지원'),
-                      ],
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildFeatureRow(Icons.block, '저장/공유 시 광고 제거'),
+                          _buildFeatureRow(Icons.flash_on, '빠른 저장 경험'),
+                          _buildFeatureRow(Icons.all_inclusive, '영구 적용'),
+                        ],
+                      ),
                     ),
                   ),
 
                   const SizedBox(height: 24),
 
-                  // 가격 옵션
+                  // 가격
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      children: [
-                        _buildPriceOption(
-                          context,
-                          index: 0,
-                          title: '평생 이용권',
-                          price: _lifetimePackage?.storeProduct.priceString ?? '₩22,000',
-                          subtitle: '한 번 결제로 영구 사용',
-                          isPopular: true,
-                          badge: '인기',
-                          isLifetime: true,
-                        ),
-                        const SizedBox(height: 12),
-                        _buildPriceOption(
-                          context,
-                          index: 1,
-                          title: '연간',
-                          price: _yearlyPackage?.storeProduct.priceString ?? '₩15,000/년',
-                          subtitle: _getYearlySubtitle(),
-                          isPopular: false,
-                        ),
-                        const SizedBox(height: 12),
-                        _buildPriceOption(
-                          context,
-                          index: 2,
-                          title: '월간',
-                          price: _monthlyPackage?.storeProduct.priceString ?? '₩2,200/월',
-                          subtitle: '',
-                          isPopular: false,
-                        ),
-                      ],
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFF6366F1), width: 2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _lifetimePackage?.storeProduct.priceString ?? '₩4,400',
+                            style: const TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF6366F1),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            '평생',
+                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
                   const SizedBox(height: 24),
 
-                  // 구독 버튼
+                  // 구매 버튼
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: SizedBox(
@@ -4898,9 +4559,9 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : Text(
-                                _selectedPlanIndex == 0 ? '평생 이용권 구매하기' : '구독 시작하기',
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            : const Text(
+                                '광고 제거 구매하기',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                               ),
                       ),
                     ),
@@ -4910,9 +4571,7 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
 
                   // 하단 안내
                   Text(
-                    _selectedPlanIndex == 0
-                        ? '한 번 결제로 모든 기능을 영구적으로 사용하세요'
-                        : '구독 시작 시 즉시 결제됩니다',
+                    '한 번 결제로 영구적으로 광고가 제거됩니다',
                     style: TextStyle(color: Colors.grey[500], fontSize: 12),
                   ),
                   TextButton(
@@ -4942,96 +4601,6 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
           const SizedBox(width: 12),
           Text(text, style: const TextStyle(fontSize: 15)),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPriceOption(
-    BuildContext context, {
-    required int index,
-    required String title,
-    required String price,
-    required String subtitle,
-    required bool isPopular,
-    String? badge,
-    bool isLifetime = false,
-  }) {
-    final isSelected = _selectedPlanIndex == index;
-    final badgeColor = isLifetime ? const Color(0xFFFF9800) : const Color(0xFF6366F1);
-    return GestureDetector(
-      onTap: () => setState(() => _selectedPlanIndex = index),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: isSelected ? badgeColor : Colors.grey[300]!,
-            width: isSelected ? 2 : 1,
-          ),
-          borderRadius: BorderRadius.circular(12),
-          color: isSelected ? badgeColor.withValues(alpha: 0.1) : null,
-        ),
-        child: Row(
-          children: [
-            // 선택 표시
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected ? badgeColor : Colors.grey[400]!,
-                  width: 2,
-                ),
-                color: isSelected ? badgeColor : Colors.transparent,
-              ),
-              child: isSelected
-                  ? const Icon(Icons.check, color: Colors.white, size: 16)
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
-                      if (badge != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: badgeColor,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            badge,
-                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                      if (isLifetime) ...[
-                        const SizedBox(width: 8),
-                        const Icon(Icons.all_inclusive, size: 16, color: Color(0xFFFF9800)),
-                      ],
-                    ],
-                  ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(subtitle, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                  ],
-                ],
-              ),
-            ),
-            Text(
-              price,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -5081,422 +4650,6 @@ class _SettingsTile extends StatelessWidget {
       subtitle: subtitle != null ? Text(subtitle!) : null,
       trailing: trailing,
       onTap: onTap,
-    );
-  }
-}
-
-// ==================== 워터마크 설정 시트 ====================
-
-class _WatermarkSettingsSheet extends StatefulWidget {
-  final VoidCallback? onSettingsChanged;
-
-  const _WatermarkSettingsSheet({this.onSettingsChanged});
-
-  @override
-  State<_WatermarkSettingsSheet> createState() => _WatermarkSettingsSheetState();
-}
-
-class _WatermarkSettingsSheetState extends State<_WatermarkSettingsSheet> {
-  bool _enabled = false;
-  String _text = 'Cover';
-  WatermarkPosition _position = WatermarkPosition.bottomRight;
-  double _opacity = 0.5;
-  final TextEditingController _textController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  @override
-  void dispose() {
-    _textController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadSettings() async {
-    final enabled = await WatermarkSettings.isEnabled();
-    final text = await WatermarkSettings.getText();
-    final position = await WatermarkSettings.getPosition();
-    final opacity = await WatermarkSettings.getOpacity();
-
-    if (mounted) {
-      setState(() {
-        _enabled = enabled;
-        _text = text;
-        _position = position;
-        _opacity = opacity;
-        _textController.text = text;
-      });
-    }
-  }
-
-  Future<void> _saveSettings() async {
-    await WatermarkSettings.setEnabled(_enabled);
-    await WatermarkSettings.setText(_text);
-    await WatermarkSettings.setPosition(_position);
-    await WatermarkSettings.setOpacity(_opacity);
-    widget.onSettingsChanged?.call();
-  }
-
-  String _getPositionName(WatermarkPosition position) {
-    switch (position) {
-      case WatermarkPosition.topLeft:
-        return '좌상단';
-      case WatermarkPosition.topCenter:
-        return '상단 중앙';
-      case WatermarkPosition.topRight:
-        return '우상단';
-      case WatermarkPosition.centerLeft:
-        return '좌측 중앙';
-      case WatermarkPosition.center:
-        return '중앙';
-      case WatermarkPosition.centerRight:
-        return '우측 중앙';
-      case WatermarkPosition.bottomLeft:
-        return '좌하단';
-      case WatermarkPosition.bottomCenter:
-        return '하단 중앙';
-      case WatermarkPosition.bottomRight:
-        return '우하단';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.85,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade400,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // 헤더
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.branding_watermark,
-                    color: Color(0xFF6366F1),
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '워터마크 설정',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        '저장 시 이미지에 워터마크가 추가됩니다',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // 워터마크 활성화 토글
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    '워터마크 사용',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Switch(
-                    value: _enabled,
-                    onChanged: (value) {
-                      setState(() => _enabled = value);
-                      _saveSettings();
-                    },
-                    activeTrackColor: const Color(0xFF6366F1),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          if (_enabled) ...[
-            const SizedBox(height: 16),
-
-            // 워터마크 텍스트
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: TextField(
-                controller: _textController,
-                decoration: InputDecoration(
-                  labelText: '워터마크 텍스트',
-                  hintText: '예: © 2024 My Brand',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  prefixIcon: const Icon(Icons.text_fields),
-                ),
-                onChanged: (value) {
-                  _text = value;
-                  _saveSettings();
-                },
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // 위치 선택
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '위치',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: GridView.count(
-                      crossAxisCount: 3,
-                      shrinkWrap: true,
-                      mainAxisSpacing: 8,
-                      crossAxisSpacing: 8,
-                      physics: const NeverScrollableScrollPhysics(),
-                      children: WatermarkPosition.values.map((position) {
-                        final isSelected = _position == position;
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() => _position = position);
-                            _saveSettings();
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? const Color(0xFF6366F1)
-                                  : (isDark ? Colors.grey.shade800 : Colors.white),
-                              borderRadius: BorderRadius.circular(8),
-                              border: isSelected
-                                  ? null
-                                  : Border.all(color: Colors.grey.shade300),
-                            ),
-                            child: Center(
-                              child: Icon(
-                                Icons.circle,
-                                size: 12,
-                                color: isSelected
-                                    ? Colors.white
-                                    : Colors.grey.shade400,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Center(
-                    child: Text(
-                      _getPositionName(_position),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // 투명도
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        '투명도',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      Text(
-                        '${(_opacity * 100).toInt()}%',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Slider(
-                    value: _opacity,
-                    min: 0.1,
-                    max: 1.0,
-                    divisions: 9,
-                    activeColor: const Color(0xFF6366F1),
-                    onChanged: (value) {
-                      setState(() => _opacity = value);
-                    },
-                    onChangeEnd: (value) {
-                      _saveSettings();
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            // 미리보기
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                height: 80,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.blue.shade900,
-                      Colors.purple.shade900,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Stack(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    Positioned(
-                      left: _position.index % 3 == 0 ? 12 : null,
-                      right: _position.index % 3 == 2 ? 12 : null,
-                      top: _position.index ~/ 3 == 0 ? 12 : null,
-                      bottom: _position.index ~/ 3 == 2 ? 12 : null,
-                      child: Center(
-                        child: Opacity(
-                          opacity: _opacity,
-                          child: Text(
-                            _text.isEmpty ? 'Cover' : _text,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              shadows: [
-                                Shadow(
-                                  offset: Offset(1, 1),
-                                  blurRadius: 2,
-                                  color: Colors.black54,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 24),
-
-          // 닫기 버튼
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  '완료',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
-          ],
-        ),
-      ),
     );
   }
 }
