@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
@@ -18,6 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+// ATT 사용 안함 (앱 추적 안함)
 
 import 'config/api_keys.dart';
 import 'config/constants.dart';
@@ -335,46 +337,202 @@ class SaveLimitService {
   }
 }
 
-// ==================== 광고 서비스 ====================
+// ==================== 광고 서비스 (풀기능) ====================
 
+/// AdMob 광고 서비스 (eCPM 최적화 버전)
+/// - UMP SDK 동의 관리 (GDPR)
+/// - 지수 백오프 재시도 로직
+/// - 광고 빈도 최적화 (쿨다운)
+/// - 네이티브 광고 풀 관리
 class AdService {
   static final AdService _instance = AdService._internal();
   factory AdService() => _instance;
   AdService._internal();
 
-  InterstitialAd? _interstitialAd;
-  bool _isInterstitialReady = false;
+  bool _isInitialized = false;
+  ConsentStatus _consentStatus = ConsentStatus.unknown;
+  bool _canShowPersonalizedAds = false;
 
-  // 초기화
+  // 전면 광고
+  InterstitialAd? _interstitialAd;
+  bool _isInterstitialAdReady = false;
+  int _interstitialRetryCount = 0;
+  static const int _maxRetryCount = 3;
+
+  // 광고 빈도 제한 (쿨다운)
+  DateTime? _lastInterstitialShown;
+  static const Duration _interstitialCooldown = Duration(seconds: 60);
+
+  /// 동의 상태 getter
+  ConsentStatus get consentStatus => _consentStatus;
+
+  /// 개인화 광고 표시 가능 여부
+  bool get canShowPersonalizedAds => _canShowPersonalizedAds;
+
+  /// 전면 광고 준비 여부
+  bool get isInterstitialAdReady => _isInterstitialAdReady;
+
+  /// 광고 초기화 (UMP SDK 포함)
   Future<void> initialize() async {
+    if (_isInitialized) return;
+
     try {
+      // 1. UMP SDK 동의 요청 (GDPR)
+      await _requestConsentInfo();
+
+      // 2. AdMob 초기화
       await MobileAds.instance.initialize();
+      _isInitialized = true;
+      debugPrint('📢 [AdService] AdMob 초기화 완료');
+
+      // 3. 광고 미리 로드
       _loadInterstitialAd();
+
+      // 4. 네이티브 광고 풀 초기화
+      NativeAdManager().initialize(adUnitId: ApiKeys.nativeAdUnitId);
     } catch (e) {
-      debugPrint('AdMob 초기화 오류: $e');
+      debugPrint('⚠️ [AdService] AdMob 초기화 실패: $e');
     }
   }
 
-  // 전면 광고 로드
+  // ==================== UMP SDK 동의 관리 ====================
+
+  /// UMP SDK 동의 정보 요청
+  Future<void> _requestConsentInfo() async {
+    try {
+      final params = ConsentRequestParameters(
+        tagForUnderAgeOfConsent: false,
+      );
+
+      ConsentInformation.instance.requestConsentInfoUpdate(
+        params,
+        () async {
+          if (await ConsentInformation.instance.isConsentFormAvailable()) {
+            _loadConsentForm();
+          } else {
+            _consentStatus = ConsentStatus.notRequired;
+            _canShowPersonalizedAds = true;
+            debugPrint('📢 [AdService] 동의 불필요 지역');
+          }
+        },
+        (error) {
+          debugPrint('⚠️ [AdService] 동의 정보 요청 실패: ${error.message}');
+          _consentStatus = ConsentStatus.unknown;
+          _canShowPersonalizedAds = false;
+        },
+      );
+    } catch (e) {
+      debugPrint('⚠️ [AdService] UMP SDK 오류: $e');
+    }
+  }
+
+  /// 동의 폼 로드 및 표시
+  void _loadConsentForm() {
+    ConsentForm.loadConsentForm(
+      (form) async {
+        final status = await ConsentInformation.instance.getConsentStatus();
+        if (status == ConsentStatus.required) {
+          form.show((formError) {
+            if (formError != null) {
+              debugPrint('⚠️ [AdService] 동의 폼 표시 오류: ${formError.message}');
+            }
+            _updateConsentStatus();
+          });
+        } else {
+          _updateConsentStatus();
+        }
+      },
+      (error) {
+        debugPrint('⚠️ [AdService] 동의 폼 로드 실패: ${error.message}');
+        _canShowPersonalizedAds = false;
+      },
+    );
+  }
+
+  /// 동의 상태 업데이트
+  Future<void> _updateConsentStatus() async {
+    final status = await ConsentInformation.instance.getConsentStatus();
+    _consentStatus = status;
+    _canShowPersonalizedAds = status == ConsentStatus.obtained ||
+        status == ConsentStatus.notRequired;
+    debugPrint('📢 [AdService] 동의 상태: $_consentStatus, 개인화: $_canShowPersonalizedAds');
+  }
+
+  // ==================== AdRequest 최적화 ====================
+
+  /// 최적화된 AdRequest 생성
+  AdRequest get _optimizedAdRequest {
+    if (_canShowPersonalizedAds) {
+      return const AdRequest();
+    } else {
+      return const AdRequest(
+        nonPersonalizedAds: true,
+      );
+    }
+  }
+
+  // ==================== 지수 백오프 재시도 ====================
+
+  /// 지수 백오프 딜레이 계산 (1초→2초→4초... 최대 32초)
+  Duration _getRetryDelay(int retryCount) {
+    final seconds = (1 << retryCount).clamp(1, 32);
+    return Duration(seconds: seconds);
+  }
+
+  // ==================== 전면 광고 ====================
+
+  /// 전면 광고 로드 (지수 백오프 재시도)
   void _loadInterstitialAd() {
     InterstitialAd.load(
       adUnitId: ApiKeys.interstitialAdUnitId,
-      request: const AdRequest(),
+      request: _optimizedAdRequest,
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
           _interstitialAd = ad;
-          _isInterstitialReady = true;
-          _interstitialAd!.setImmersiveMode(true);
+          _isInterstitialAdReady = true;
+          _interstitialRetryCount = 0;
+          debugPrint('📢 [AdService] 전면 광고 로드 완료');
+
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) {
+              ad.dispose();
+              _isInterstitialAdReady = false;
+              _loadInterstitialAd();
+            },
+            onAdFailedToShowFullScreenContent: (ad, error) {
+              ad.dispose();
+              _isInterstitialAdReady = false;
+              _loadInterstitialAd();
+              debugPrint('⚠️ [AdService] 전면 광고 표시 실패: $error');
+            },
+            onAdImpression: (ad) {
+              debugPrint('📢 [AdService] 전면 광고 노출');
+            },
+          );
         },
         onAdFailedToLoad: (error) {
-          debugPrint('전면 광고 로드 실패: $error');
-          _isInterstitialReady = false;
+          _isInterstitialAdReady = false;
+          debugPrint('⚠️ [AdService] 전면 광고 로드 실패: $error');
+
+          // 지수 백오프 재시도
+          if (_interstitialRetryCount < _maxRetryCount) {
+            final delay = _getRetryDelay(_interstitialRetryCount);
+            _interstitialRetryCount++;
+            debugPrint('📢 [AdService] 전면 광고 재시도 $_interstitialRetryCount/$_maxRetryCount (${delay.inSeconds}초 후)');
+            Future.delayed(delay, _loadInterstitialAd);
+          }
         },
       ),
     );
   }
 
-  // 전면 광고 표시 (Pro 유저가 아닌 경우만)
+  /// 전면 광고 쿨다운 확인
+  bool get _isInterstitialCooldownOver {
+    if (_lastInterstitialShown == null) return true;
+    return DateTime.now().difference(_lastInterstitialShown!) >= _interstitialCooldown;
+  }
+
+  /// 전면 광고 표시 (Pro 유저가 아닌 경우만)
   Future<void> showInterstitialAd({VoidCallback? onAdClosed}) async {
     // Pro 유저는 광고 안 보여줌
     if (SubscriptionService().isProUser) {
@@ -382,30 +540,236 @@ class AdService {
       return;
     }
 
-    if (_isInterstitialReady && _interstitialAd != null) {
+    // 쿨다운 체크
+    if (!_isInterstitialCooldownOver) {
+      debugPrint('⚠️ [AdService] 전면 광고 쿨다운 중');
+      onAdClosed?.call();
+      return;
+    }
+
+    if (_isInterstitialAdReady && _interstitialAd != null) {
       _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
         onAdDismissedFullScreenContent: (ad) {
           ad.dispose();
-          _isInterstitialReady = false;
-          _loadInterstitialAd(); // 다음 광고 로드
+          _isInterstitialAdReady = false;
+          _loadInterstitialAd();
           onAdClosed?.call();
         },
         onAdFailedToShowFullScreenContent: (ad, error) {
           ad.dispose();
-          _isInterstitialReady = false;
+          _isInterstitialAdReady = false;
           _loadInterstitialAd();
           onAdClosed?.call();
         },
       );
       await _interstitialAd!.show();
+      _lastInterstitialShown = DateTime.now();
     } else {
+      debugPrint('⚠️ [AdService] 전면 광고가 준비되지 않음');
+      _loadInterstitialAd();
       onAdClosed?.call();
     }
   }
 
+  // ==================== 리소스 정리 ====================
+
+  void dispose() {
+    _interstitialAd?.dispose();
+    _interstitialAd = null;
+    _isInterstitialAdReady = false;
+  }
 }
 
-// 네이티브 광고 위젯
+// ==================== 네이티브 광고 풀 매니저 ====================
+
+/// 네이티브 광고 풀 + 프리페치 매니저
+/// 즉시 로딩 광고 경험 제공
+class NativeAdManager {
+  static final NativeAdManager _instance = NativeAdManager._internal();
+  factory NativeAdManager() => _instance;
+  NativeAdManager._internal();
+
+  // ==================== 설정 ====================
+
+  /// 풀 크기 (유지할 광고 개수)
+  static const int _poolSize = 8;
+
+  /// 최소 풀 크기 (이 이하로 떨어지면 보충)
+  static const int _minPoolSize = 3;
+
+  /// 병렬 로딩 배치 크기
+  static const int _parallelBatchSize = 4;
+
+  // ==================== 상태 ====================
+
+  /// 사용 가능한 광고 풀
+  final List<NativeAd> _adPool = [];
+
+  /// 현재 로딩 중인지 여부
+  bool _isLoading = false;
+
+  /// 초기화 완료 여부
+  bool _isInitialized = false;
+
+  /// 광고 유닛 ID
+  String? _adUnitId;
+
+  /// 풀 크기
+  int get poolSize => _adPool.length;
+
+  /// 광고가 있는지 확인
+  bool get hasAd => _adPool.isNotEmpty;
+
+  // ==================== 초기화 ====================
+
+  /// 매니저 초기화 (앱 시작 시 호출)
+  Future<void> initialize({required String adUnitId}) async {
+    if (_isInitialized) return;
+
+    _adUnitId = adUnitId;
+    _isInitialized = true;
+
+    debugPrint('📢 [NativeAdManager] 초기화 시작');
+    await _fillPoolParallel();
+    debugPrint('📢 [NativeAdManager] 초기화 완료 - 풀: ${_adPool.length}개');
+  }
+
+  // ==================== 광고 요청 ====================
+
+  /// 광고 가져오기 (풀에서 꺼냄)
+  /// 반환값이 null이면 풀이 비어있음
+  NativeAd? getAd() {
+    if (_adPool.isEmpty) {
+      debugPrint('⚠️ [NativeAdManager] 풀 비어있음');
+      _triggerRefill();
+      return null;
+    }
+
+    final ad = _adPool.removeAt(0);
+    debugPrint('📢 [NativeAdManager] 광고 제공 (남은 풀: ${_adPool.length})');
+
+    // 풀 보충 체크
+    _checkAndRefill();
+
+    return ad;
+  }
+
+  /// 광고 반환 (사용하지 않은 광고를 풀에 다시 넣음)
+  void returnAd(NativeAd ad) {
+    if (_adPool.length < _poolSize) {
+      _adPool.add(ad);
+      debugPrint('📢 [NativeAdManager] 광고 반환됨 (풀: ${_adPool.length})');
+    } else {
+      ad.dispose();
+    }
+  }
+
+  // ==================== 풀 관리 ====================
+
+  /// 풀 보충 체크
+  void _checkAndRefill() {
+    if (_adPool.length < _minPoolSize) {
+      _triggerRefill();
+    }
+  }
+
+  /// 풀 보충 트리거 (비동기)
+  void _triggerRefill() {
+    if (_isLoading) return;
+    _fillPoolParallel();
+  }
+
+  /// 풀 채우기 (병렬 로딩)
+  Future<void> _fillPoolParallel() async {
+    if (_adUnitId == null) return;
+
+    _isLoading = true;
+    debugPrint('📢 [NativeAdManager] 풀 보충 시작 (병렬)');
+
+    try {
+      while (_adPool.length < _poolSize) {
+        final neededCount = _poolSize - _adPool.length;
+        final batchSize = neededCount.clamp(1, _parallelBatchSize);
+
+        final futures = List.generate(
+          batchSize,
+          (_) => _loadOneAd(),
+        );
+
+        final results = await Future.wait(futures);
+
+        int loadedCount = 0;
+        for (final ad in results) {
+          if (ad != null) {
+            _adPool.add(ad);
+            loadedCount++;
+          }
+        }
+
+        debugPrint('📢 [NativeAdManager] 배치 로드 완료: $loadedCount/$batchSize (풀: ${_adPool.length}/$_poolSize)');
+
+        if (loadedCount == 0) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          break; // 연속 실패 시 중단
+        }
+      }
+    } finally {
+      _isLoading = false;
+    }
+
+    debugPrint('📢 [NativeAdManager] 풀 보충 완료 (${_adPool.length}개)');
+  }
+
+  /// 단일 광고 로드
+  Future<NativeAd?> _loadOneAd() async {
+    final completer = Completer<NativeAd?>();
+
+    final ad = NativeAd(
+      adUnitId: _adUnitId!,
+      request: const AdRequest(),
+      factoryId: 'listTile',
+      listener: NativeAdListener(
+        onAdLoaded: (ad) {
+          if (!completer.isCompleted) {
+            completer.complete(ad as NativeAd);
+          }
+        },
+        onAdFailedToLoad: (ad, error) {
+          debugPrint('⚠️ [NativeAdManager] 광고 로드 실패: $error');
+          ad.dispose();
+          if (!completer.isCompleted) {
+            completer.complete(null);
+          }
+        },
+      ),
+    );
+
+    ad.load();
+
+    // 타임아웃 (8초)
+    return completer.future.timeout(
+      const Duration(seconds: 8),
+      onTimeout: () {
+        debugPrint('⚠️ [NativeAdManager] 광고 로드 타임아웃');
+        ad.dispose();
+        return null;
+      },
+    );
+  }
+
+  // ==================== 정리 ====================
+
+  void dispose() {
+    for (final ad in _adPool) {
+      ad.dispose();
+    }
+    _adPool.clear();
+    _isInitialized = false;
+    debugPrint('📢 [NativeAdManager] 리소스 정리 완료');
+  }
+}
+
+// 네이티브 광고 위젯 (풀에서 광고 가져옴)
 class NativeAdWidget extends StatefulWidget {
   const NativeAdWidget({super.key});
 
@@ -424,6 +788,20 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
   }
 
   void _loadAd() {
+    // NativeAdManager 풀에서 광고 가져오기
+    final ad = NativeAdManager().getAd();
+    if (ad != null) {
+      _nativeAd = ad;
+      if (mounted) {
+        setState(() => _isLoaded = true);
+      }
+    } else {
+      // 풀에 광고가 없으면 직접 로드
+      _loadAdDirectly();
+    }
+  }
+
+  void _loadAdDirectly() {
     _nativeAd = NativeAd(
       adUnitId: ApiKeys.nativeAdUnitId,
       listener: NativeAdListener(
@@ -433,7 +811,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
           }
         },
         onAdFailedToLoad: (ad, error) {
-          debugPrint('네이티브 광고 로드 실패: $error');
+          debugPrint('⚠️ [NativeAdWidget] 광고 로드 실패: $error');
           ad.dispose();
         },
       ),
@@ -444,6 +822,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
 
   @override
   void dispose() {
+    // 사용한 광고는 dispose (풀에 반환하지 않음)
     _nativeAd?.dispose();
     super.dispose();
   }
