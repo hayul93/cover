@@ -1557,6 +1557,10 @@ class _EditorScreenState extends State<EditorScreen> {
             resetAspectRatioEnabled: true,
             rotateButtonsHidden: false,
             rotateClockwiseButtonHidden: true,
+            aspectRatioPickerButtonHidden: false,
+            resetButtonHidden: false,
+            hidesNavigationBar: false,
+            minimumAspectRatio: 0.1,
           ),
         ],
       );
@@ -3103,6 +3107,12 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _performShare() async {
     if (_currentBytes == null) return;
 
+    // iOS 공유 시트 위치를 위해 RenderBox 미리 획득
+    final box = context.findRenderObject() as RenderBox?;
+    final sharePosition = box != null
+        ? box.localToGlobal(Offset.zero) & box.size
+        : const Rect.fromLTWH(0, 0, 100, 100);
+
     setState(() => _isProcessing = true);
 
     try {
@@ -3148,9 +3158,10 @@ class _EditorScreenState extends State<EditorScreen> {
       final tempFile = File('${tempDir.path}/Cover_$timestamp.jpg');
       await tempFile.writeAsBytes(finalBytes);
 
-      // 공유
+      // 공유 (iOS에서는 sharePositionOrigin 필요)
       await Share.shareXFiles(
         [XFile(tempFile.path)],
+        sharePositionOrigin: sharePosition,
       );
 
       // Analytics 이벤트
