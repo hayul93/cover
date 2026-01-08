@@ -1,5 +1,5 @@
 name: cover
-description: "개인정보를 안전하게 - 3초만에 블러 처리"
+description: "Protect your privacy - Blur in 3 seconds"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -8,6 +8,8 @@ environment:
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
 
   # Image Processing
@@ -24,8 +26,7 @@ dependencies:
   permission_handler: ^12.0.1
   shared_preferences: ^2.2.2
   url_launcher: ^6.2.5
-  device_info_plus: ^11.0.0
-  package_info_plus: ^8.0.0
+  intl: ^0.20.2
 
   # Monetization
   purchases_flutter: ^8.1.0

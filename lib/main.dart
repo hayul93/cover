@@ -17,12 +17,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'config/api_keys.dart';
 import 'config/constants.dart';
+import 'l10n/app_localizations.dart';
 
 // 테마 모드 관리
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
+
+// 언어 설정 관리
+final ValueNotifier<Locale?> localeNotifier = ValueNotifier(null);
 
 // ==================== Analytics 서비스 ====================
 
@@ -593,26 +598,39 @@ class CoverApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
       builder: (context, themeMode, child) {
-        return MaterialApp(
-          title: 'Cover',
-          debugShowCheckedModeBanner: false,
-          themeMode: themeMode,
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: AppColors.primary,
-              brightness: Brightness.light,
-            ),
-            useMaterial3: true,
-          ),
-          darkTheme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: AppColors.primary,
-              brightness: Brightness.dark,
-            ),
-            useMaterial3: true,
-            scaffoldBackgroundColor: Colors.black,
-          ),
-          home: const SplashScreen(),
+        return ValueListenableBuilder<Locale?>(
+          valueListenable: localeNotifier,
+          builder: (context, locale, child) {
+            return MaterialApp(
+              title: 'Cover',
+              debugShowCheckedModeBanner: false,
+              themeMode: themeMode,
+              locale: locale,
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: ThemeData(
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: AppColors.primary,
+                  brightness: Brightness.light,
+                ),
+                useMaterial3: true,
+              ),
+              darkTheme: ThemeData(
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: AppColors.primary,
+                  brightness: Brightness.dark,
+                ),
+                useMaterial3: true,
+                scaffoldBackgroundColor: Colors.black,
+              ),
+              home: const SplashScreen(),
+            );
+          },
         );
       },
     );
@@ -899,6 +917,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
@@ -919,16 +938,16 @@ class _HomeScreenState extends State<HomeScreen> {
           unselectedItemColor: Colors.grey,
           selectedFontSize: 12,
           unselectedFontSize: 12,
-          items: const [
+          items: [
             BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: '홈',
+              icon: const Icon(Icons.home_outlined),
+              activeIcon: const Icon(Icons.home),
+              label: l10n.home,
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.settings_outlined),
-              activeIcon: Icon(Icons.settings),
-              label: '설정',
+              icon: const Icon(Icons.settings_outlined),
+              activeIcon: const Icon(Icons.settings),
+              label: l10n.settings,
             ),
           ],
         ),
@@ -971,8 +990,9 @@ class _HomeTabState extends State<_HomeTab> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('이미지를 불러올 수 없습니다: $e')),
+          SnackBar(content: Text('${l10n.imageLoadFailed}: $e')),
         );
       }
     } finally {
@@ -1001,8 +1021,9 @@ class _HomeTabState extends State<_HomeTab> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('카메라를 사용할 수 없습니다: $e')),
+          SnackBar(content: Text('${l10n.get('cameraError')}: $e')),
         );
       }
     } finally {
@@ -1015,6 +1036,7 @@ class _HomeTabState extends State<_HomeTab> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtitleColor = isDark ? Colors.white70 : Colors.black54;
+    final l10n = AppLocalizations.of(context);
 
     return SafeArea(
       child: Stack(
@@ -1036,7 +1058,7 @@ class _HomeTabState extends State<_HomeTab> {
                         ),
                       ),
                       Text(
-                        'Cover',
+                        l10n.appName,
                         style: TextStyle(
                           fontSize: 56,
                           fontWeight: FontWeight.bold,
@@ -1052,7 +1074,7 @@ class _HomeTabState extends State<_HomeTab> {
                     child: ElevatedButton.icon(
                       onPressed: _isLoading ? null : _pickFromGallery,
                       icon: const Icon(Icons.photo_library_rounded),
-                      label: const Text('갤러리', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      label: Text(l10n.gallery, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -1067,7 +1089,7 @@ class _HomeTabState extends State<_HomeTab> {
                     child: OutlinedButton.icon(
                       onPressed: _isLoading ? null : _pickFromCamera,
                       icon: const Icon(Icons.camera_alt_rounded),
-                      label: const Text('카메라', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      label: Text(l10n.camera, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: textColor,
                         side: BorderSide(color: subtitleColor),
@@ -4116,8 +4138,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     } else {
       if (context.mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('앱스토어를 열 수 없습니다')),
+          SnackBar(content: Text(l10n.get('cannotOpenStore'))),
         );
       }
     }
@@ -4133,10 +4156,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('설정'),
+        title: Text(l10n.settings),
         automaticallyImplyLeading: false,
       ),
       body: ListView(
@@ -4178,9 +4202,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Cover Pro',
-                            style: TextStyle(
+                          Text(
+                            l10n.removeAds,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -4188,7 +4212,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '모든 기능을 무제한으로',
+                            l10n.removeAdsDesc,
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 13,
@@ -4205,27 +4229,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           // 지원
-          const _SectionHeader(title: '지원'),
+          _SectionHeader(title: l10n.support),
           _SettingsTile(
             icon: Icons.star_outline,
-            title: '앱 리뷰 작성',
-            subtitle: '별점과 리뷰로 응원해주세요',
+            title: l10n.rateApp,
+            subtitle: l10n.rateAppDesc,
             onTap: () => _rateApp(context),
           ),
 
           const SizedBox(height: 8),
 
           // 앱 정보
-          const _SectionHeader(title: '정보'),
+          _SectionHeader(title: l10n.appInfo),
           _SettingsTile(
             icon: Icons.info_outline,
-            title: '버전',
+            title: l10n.version,
             subtitle: '1.0.0',
             onTap: null,
           ),
           _SettingsTile(
             icon: Icons.description_outlined,
-            title: '오픈소스 라이선스',
+            title: l10n.openSourceLicenses,
             onTap: () {
               showLicensePage(
                 context: context,
@@ -4236,12 +4260,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           _SettingsTile(
             icon: Icons.privacy_tip_outlined,
-            title: '개인정보 처리방침',
+            title: l10n.privacyPolicy,
             onTap: () => _openUrl('https://devyulstudio.notion.site/cover-privacy-policy'),
           ),
           _SettingsTile(
             icon: Icons.article_outlined,
-            title: '이용약관',
+            title: l10n.termsOfService,
             onTap: () => _openUrl('https://devyulstudio.notion.site/cover-terms-of-service'),
           ),
 
@@ -4252,7 +4276,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 Text(
-                  'Cover',
+                  l10n.appName,
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -4261,7 +4285,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '개인정보를 안전하게',
+                  l10n.appDescription,
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark ? Colors.white38 : Colors.black26,
@@ -4326,19 +4350,21 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
         }
 
         if (mounted) {
+          final l10n = AppLocalizations.of(context);
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(success ? '광고가 제거되었습니다!' : '구매가 취소되었습니다'),
+              content: Text(success ? l10n.adsRemoved : l10n.get('purchaseCancelled')),
               backgroundColor: success ? Colors.green : Colors.orange,
             ),
           );
         }
       } else {
         if (mounted) {
+          final l10n = AppLocalizations.of(context);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('상품 정보를 불러올 수 없습니다'),
+            SnackBar(
+              content: Text(l10n.get('cannotLoadProduct')),
               backgroundColor: Colors.orange,
             ),
           );
@@ -4346,8 +4372,9 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('오류: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('${l10n.error}: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -4364,18 +4391,20 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
       final success = await _subscriptionService.restorePurchases();
 
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(success ? '구독이 복원되었습니다!' : '복원할 구독이 없습니다'),
+            content: Text(success ? l10n.restoreSuccess : l10n.restoreFailed),
             backgroundColor: success ? Colors.green : Colors.orange,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('복원 오류: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('${l10n.get('restoreError')}: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -4389,6 +4418,7 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
     final maxHeight = MediaQuery.of(context).size.height * 0.9;
+    final l10n = AppLocalizations.of(context);
 
     return Container(
       constraints: BoxConstraints(maxHeight: maxHeight),
@@ -4422,13 +4452,13 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                   // 헤더
                   const Icon(Icons.block, size: 48, color: Color(0xFF6366F1)),
                   const SizedBox(height: 12),
-                  const Text(
-                    '광고 제거',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  Text(
+                    l10n.removeAds,
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '한 번 구매로 영구적으로 광고 없이 사용하세요',
+                    l10n.get('removeAdsFullDesc'),
                     style: TextStyle(color: Colors.grey[600], fontSize: 14),
                   ),
 
@@ -4445,9 +4475,9 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                       ),
                       child: Column(
                         children: [
-                          _buildFeatureRow(Icons.block, '저장/공유 시 광고 제거'),
-                          _buildFeatureRow(Icons.flash_on, '빠른 저장 경험'),
-                          _buildFeatureRow(Icons.all_inclusive, '영구 적용'),
+                          _buildFeatureRow(Icons.block, l10n.get('noAdsOnSave')),
+                          _buildFeatureRow(Icons.flash_on, l10n.get('fastSave')),
+                          _buildFeatureRow(Icons.all_inclusive, l10n.get('permanent')),
                         ],
                       ),
                     ),
@@ -4468,7 +4498,7 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            _lifetimePackage?.storeProduct.priceString ?? '₩4,400',
+                            _lifetimePackage?.storeProduct.priceString ?? '\$3.99',
                             style: const TextStyle(
                               fontSize: 32,
                               fontWeight: FontWeight.bold,
@@ -4476,9 +4506,9 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          const Text(
-                            '평생',
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                          Text(
+                            l10n.lifetime,
+                            style: const TextStyle(fontSize: 16, color: Colors.grey),
                           ),
                         ],
                       ),
@@ -4511,9 +4541,9 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Text(
-                                '광고 제거 구매하기',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            : Text(
+                                l10n.get('purchaseRemoveAds'),
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                               ),
                       ),
                     ),
@@ -4523,13 +4553,13 @@ class _ProSubscriptionSheetState extends State<_ProSubscriptionSheet> {
 
                   // 하단 안내
                   Text(
-                    '한 번 결제로 영구적으로 광고가 제거됩니다',
+                    l10n.get('oneTimePurchaseNote'),
                     style: TextStyle(color: Colors.grey[500], fontSize: 12),
                   ),
                   TextButton(
                     onPressed: _isLoading ? null : _restorePurchases,
                     child: Text(
-                      '이전 구매 복원',
+                      l10n.restore,
                       style: TextStyle(color: Colors.grey[600], fontSize: 12),
                     ),
                   ),
@@ -4584,14 +4614,12 @@ class _SettingsTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final VoidCallback? onTap;
-  final Widget? trailing;
 
   const _SettingsTile({
     required this.icon,
     required this.title,
     this.subtitle,
     this.onTap,
-    this.trailing,
   });
 
   @override
@@ -4600,7 +4628,6 @@ class _SettingsTile extends StatelessWidget {
       leading: Icon(icon, size: 24),
       title: Text(title),
       subtitle: subtitle != null ? Text(subtitle!) : null,
-      trailing: trailing,
       onTap: onTap,
     );
   }
